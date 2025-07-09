@@ -1,7 +1,9 @@
 <template>
   <div class="container mt-5 mx-auto text-start" style="max-width: 400px;">
-    <img src="/vite.svg" alt="logo" width="80" class="mb-3" />
-    <h3>SIS Login</h3>
+    <div class="text-center">
+      <img src="/vite.svg" alt="logo" width="80" class="mb-3" />
+      <h3>SIS Login</h3>
+    </div>
     <form @submit.prevent="login">
       <div class="mb-3">
         <label class="form-label">Username</label>

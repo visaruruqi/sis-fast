@@ -11,6 +11,7 @@ This is a simple single page application built with Vue 3 and Vue Router. It dem
 - Enroll students in courses with grades
 
 ## Getting Started
+Requires Node.js **20.19** or **22.12** or newer.
 ```
 cd app
 npm install

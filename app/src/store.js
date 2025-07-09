@@ -1,7 +1,7 @@
-import { reactive } from 'vue'
+import { makeAutoObservable } from 'mobx'
 
-const store = reactive({
-  students: [
+class Store {
+  students = [
     {
       id: 'stu001',
       firstName: 'Arben',
@@ -50,8 +50,8 @@ const store = reactive({
       enrollmentYear: 2022,
       status: 'Active'
     }
-  ],
-  courses: [
+  ]
+  courses = [
     {
       id: 'crs001',
       name: 'Introduction to Programming',
@@ -164,8 +164,8 @@ const store = reactive({
       credits: 3,
       instructor: 'Prof. Arber M'
     }
-  ],
-  enrollments: [
+  ]
+  enrollments = [
     {
       id: 'enr001',
       studentId: 'stu001',
@@ -195,6 +195,11 @@ const store = reactive({
       grade: ''
     }
   ]
-})
 
+  constructor() {
+    makeAutoObservable(this, {}, { autoBind: true })
+  }
+}
+
+const store = new Store()
 export default store

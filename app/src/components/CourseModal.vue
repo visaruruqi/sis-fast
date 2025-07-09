@@ -20,6 +20,10 @@
               <label class="form-label">Credits</label>
               <input v-model.number="form.credits" type="number" class="form-control" required />
             </div>
+            <div class="mb-3">
+              <label class="form-label">Instructor</label>
+              <input v-model="form.instructor" class="form-control" required />
+            </div>
             <button type="submit" class="btn btn-primary">Save</button>
           </form>
         </div>
@@ -42,7 +46,8 @@ const form = reactive({
   id: '',
   name: '',
   code: '',
-  credits: 0
+  credits: 0,
+  instructor: ''
 })
 const modalRef = ref()
 let modal

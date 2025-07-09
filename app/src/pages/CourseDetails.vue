@@ -3,6 +3,7 @@
     <div v-if="course">
       <h3>{{ course.name }} ({{ course.code }})</h3>
       <p>Credits: {{ course.credits }}</p>
+      <p>Instructor: {{ course.instructor }}</p>
 
       <h4 class="mt-4">Enrolled Students</h4>
       <table class="table">

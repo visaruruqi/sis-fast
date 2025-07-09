@@ -49,6 +49,30 @@ const store = reactive({
       address: 'Peja, Kosovo',
       enrollmentYear: 2022,
       status: 'Active'
+    },
+    {
+      id: 'stu005',
+      firstName: 'Jeton',
+      lastName: 'Pula',
+      dateOfBirth: '2004-01-11',
+      gender: 'Male',
+      email: 'jeton.pula@email.com',
+      phone: '+38344111226',
+      address: 'Vushtrri, Kosovo',
+      enrollmentYear: 2023,
+      status: 'Active'
+    },
+    {
+      id: 'stu006',
+      firstName: 'Drita',
+      lastName: 'Sahiti',
+      dateOfBirth: '2002-07-30',
+      gender: 'Female',
+      email: 'drita.sahiti@email.com',
+      phone: '+38344111227',
+      address: 'Gjilan, Kosovo',
+      enrollmentYear: 2021,
+      status: 'Active'
     }
   ],
   courses: [
@@ -83,6 +107,22 @@ const store = reactive({
       description: 'Relational database design.',
       credits: 3,
       instructor: 'Prof. Leutrim H'
+    },
+    {
+      id: 'crs005',
+      name: 'Operating Systems',
+      code: 'CS301',
+      description: 'Process management and concurrency.',
+      credits: 4,
+      instructor: 'Prof. Shkelzen M'
+    },
+    {
+      id: 'crs006',
+      name: 'Computer Networks',
+      code: 'CS302',
+      description: 'Network protocols and architecture.',
+      credits: 3,
+      instructor: 'Prof. Ardian R'
     }
   ],
   enrollments: [
@@ -112,6 +152,20 @@ const store = reactive({
       studentId: 'stu004',
       courseId: 'crs001',
       semester: 'Fall 2024',
+      grade: ''
+    },
+    {
+      id: 'enr005',
+      studentId: 'stu005',
+      courseId: 'crs005',
+      semester: 'Spring 2025',
+      grade: ''
+    },
+    {
+      id: 'enr006',
+      studentId: 'stu006',
+      courseId: 'crs006',
+      semester: 'Spring 2025',
       grade: ''
     }
   ]

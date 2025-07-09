@@ -11,6 +11,7 @@
           <th>Name</th>
           <th>Code</th>
           <th>Credits</th>
+          <th>Instructor</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -19,6 +20,7 @@
           <td><router-link :to="`/courses/${c.id}`">{{ c.name }}</router-link></td>
           <td>{{ c.code }}</td>
           <td>{{ c.credits }}</td>
+          <td>{{ c.instructor }}</td>
           <td>
             <button class="btn btn-sm btn-secondary me-2" @click="edit(c)">Edit</button>
             <button class="btn btn-sm btn-danger" @click="remove(c)">Delete</button>

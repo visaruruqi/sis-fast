@@ -1,6 +1,6 @@
 <template>
   <div class="container mt-5 text-center" style="max-width: 400px;">
-    <img src="/vite.svg" alt="logo" width="80" class="mb-3" />
+    <img src="/sis-logo.svg" alt="SIS logo" width="80" class="mb-3" />
     <h3>SIS Login</h3>
     <form @submit.prevent="login">
       <div class="mb-3">

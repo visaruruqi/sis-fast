@@ -5,6 +5,7 @@ import StudentDetails from './pages/StudentDetails.vue'
 import Archived from './pages/Archived.vue'
 import Courses from './pages/Courses.vue'
 import CourseDetails from './pages/CourseDetails.vue'
+import Instructors from './pages/Instructors.vue'
 
 const routes = [
   { path: '/login', component: Login },
@@ -36,6 +37,11 @@ const routes = [
   {
     path: '/courses/:id',
     component: CourseDetails,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/instructors',
+    component: Instructors,
     meta: { requiresAuth: true }
   },
 ]

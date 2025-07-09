@@ -18,10 +18,6 @@
               <label class="form-label">Semester</label>
               <input v-model="form.semester" class="form-control" required />
             </div>
-            <div class="mb-3">
-              <label class="form-label">Grade</label>
-              <input v-model="form.grade" class="form-control" />
-            </div>
             <button type="submit" class="btn btn-primary">Save</button>
           </form>
         </div>
@@ -43,8 +39,7 @@ const emit = defineEmits(['update:modelValue', 'save'])
 
 const form = reactive({
   courseId: '',
-  semester: '',
-  grade: ''
+  semester: ''
 })
 
 const modalRef = ref()
@@ -58,7 +53,6 @@ const show = () => {
   if (!modal) modal = new bootstrap.Modal(modalRef.value)
   form.courseId = store.courses[0]?.id || ''
   form.semester = ''
-  form.grade = ''
   modal.show()
 }
 

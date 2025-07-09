@@ -16,11 +16,10 @@
             </div>
             <div class="mb-3">
               <label class="form-label">Semester</label>
-              <input v-model="form.semester" class="form-control" required />
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Grade</label>
-              <input v-model="form.grade" class="form-control" />
+              <select v-model="form.semester" class="form-select" required>
+                <option value="" disabled>Select semester</option>
+                <option v-for="s in semesters" :key="s" :value="s">{{ s }}</option>
+              </select>
             </div>
             <button type="submit" class="btn btn-primary">Save</button>
           </form>
@@ -35,6 +34,8 @@ import { ref, reactive, watch, onMounted } from 'vue'
 import bootstrap from 'bootstrap/dist/js/bootstrap.bundle'
 import store from '../store'
 
+const semesters = ['Spring 2024', 'Fall 2024', 'Spring 2025', 'Fall 2025']
+
 const props = defineProps({
   modelValue: Boolean,
   studentId: String
@@ -43,8 +44,7 @@ const emit = defineEmits(['update:modelValue', 'save'])
 
 const form = reactive({
   courseId: '',
-  semester: '',
-  grade: ''
+  semester: ''
 })
 
 const modalRef = ref()
@@ -58,7 +58,6 @@ const show = () => {
   if (!modal) modal = new bootstrap.Modal(modalRef.value)
   form.courseId = store.courses[0]?.id || ''
   form.semester = ''
-  form.grade = ''
   modal.show()
 }
 

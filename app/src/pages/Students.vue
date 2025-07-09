@@ -44,6 +44,7 @@ const selected = ref(null)
 
 const filtered = computed(() => {
   return store.students.filter(s => {
+    if (s.status === 'Archived') return false
     return (
       s.firstName.toLowerCase().includes(search.value.toLowerCase()) ||
       s.lastName.toLowerCase().includes(search.value.toLowerCase())

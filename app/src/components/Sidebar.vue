@@ -10,6 +10,9 @@
         <router-link class="nav-link text-white" to="/courses">Courses</router-link>
       </li>
       <li>
+        <router-link class="nav-link text-white" to="/instructors">Instructors</router-link>
+      </li>
+      <li>
         <router-link class="nav-link text-white" to="/archived">Archived</router-link>
       </li>
     </ul>

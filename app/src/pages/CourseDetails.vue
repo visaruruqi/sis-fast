@@ -18,7 +18,7 @@
           <tr v-for="e in courseEnrollments" :key="e.id">
             <td>{{ studentName(e.studentId) }}</td>
             <td>{{ e.semester }}</td>
-            <td>{{ e.grade }}</td>
+            <td>{{ e.grade || '-' }}</td>
           </tr>
         </tbody>
       </table>

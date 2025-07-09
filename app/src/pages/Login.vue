@@ -1,5 +1,5 @@
 <template>
-  <div class="container mt-5 text-center" style="max-width: 400px;">
+  <div class="container mt-5 mx-auto text-start" style="max-width: 400px;">
     <img src="/vite.svg" alt="logo" width="80" class="mb-3" />
     <h3>SIS Login</h3>
     <form @submit.prevent="login">

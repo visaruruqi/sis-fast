@@ -15,7 +15,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="c in filtered" :key="c.id">
+        <tr v-for="c in paginated" :key="c.id">
           <td><router-link :to="`/courses/${c.id}`">{{ c.name }}</router-link></td>
           <td>{{ c.code }}</td>
           <td>{{ c.credits }}</td>
@@ -26,23 +26,46 @@
         </tr>
       </tbody>
     </table>
+    <nav aria-label="Course pages" class="mt-2">
+      <ul class="pagination justify-content-center">
+        <li class="page-item" :class="{ disabled: page === 1 }">
+          <button class="page-link" @click="page--" :disabled="page === 1">Previous</button>
+        </li>
+        <li class="page-item" :class="{ disabled: page === totalPages }">
+          <button class="page-link" @click="page++" :disabled="page === totalPages">Next</button>
+        </li>
+      </ul>
+    </nav>
     <CourseModal v-model="modalOpen" :course="selected" @save="save" />
   </Layout>
 </template>
 
 <script setup>
-import { ref, computed, defineAsyncComponent } from 'vue'
+import { ref, computed, watch, defineAsyncComponent } from 'vue'
 import Layout from '../components/Layout.vue'
 import store from '../store'
 
 const search = ref('')
 const modalOpen = ref(false)
 const selected = ref(null)
+const page = ref(1)
+const pageSize = 10
 
 const CourseModal = defineAsyncComponent(() => import('../components/CourseModal.vue'))
 
-const filtered = computed(() => {
+const filteredCourses = computed(() => {
   return store.courses.filter(c => c.name.toLowerCase().includes(search.value.toLowerCase()))
+})
+
+const totalPages = computed(() => Math.ceil(filteredCourses.value.length / pageSize))
+
+const paginated = computed(() => {
+  const start = (page.value - 1) * pageSize
+  return filteredCourses.value.slice(start, start + pageSize)
+})
+
+watch(filteredCourses, () => {
+  if (page.value > totalPages.value) page.value = totalPages.value || 1
 })
 
 const openModal = () => {

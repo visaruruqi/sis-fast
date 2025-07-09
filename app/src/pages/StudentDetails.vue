@@ -1,6 +1,7 @@
 <template>
   <Layout>
     <div v-if="student">
+      <router-link to="/students" class="btn btn-link p-0 mb-2">Back</router-link>
       <h3>{{ student.firstName }} {{ student.lastName }}</h3>
       <p>Email: {{ student.email }}</p>
       <p>Status: {{ student.status }}</p>
@@ -19,7 +20,7 @@
           <tr v-for="e in studentEnrollments" :key="e.id">
             <td>{{ courseName(e.courseId) }}</td>
             <td>{{ e.semester }}</td>
-            <td>{{ e.grade }}</td>
+            <td>{{ e.grade || '-' }}</td>
           </tr>
         </tbody>
       </table>

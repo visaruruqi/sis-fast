@@ -50,6 +50,6 @@ const courseName = (cid) => {
 
 const enroll = (data) => {
   data.id = 'enr' + Math.random().toString().slice(2,8)
-  store.enrollments.push(data)
+  store.enrollments.push({ ...data, grade: '' })
 }
 </script>

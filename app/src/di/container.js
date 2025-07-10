@@ -9,14 +9,16 @@ const container = new Container()
 
 container.bind(TYPES.Store).toConstantValue(store)
 container.bind(TYPES.StudentGateway).toConstantValue(new StudentGateway())
+// Inversify v7's context object exposes helper methods like `get` rather than
+// the older `context.container.get` API. Use `ctx.get` for compatibility.
 container.bind(TYPES.StudentRepository).toDynamicValue(ctx => {
   return new StudentRepository(
-    ctx.container.get(TYPES.Store),
-    ctx.container.get(TYPES.StudentGateway)
+    ctx.get(TYPES.Store),
+    ctx.get(TYPES.StudentGateway)
   )
 }).inSingletonScope()
 container.bind(TYPES.StudentsPresenter).toDynamicValue(ctx => {
-  return new StudentsPresenter(ctx.container.get(TYPES.StudentRepository))
+  return new StudentsPresenter(ctx.get(TYPES.StudentRepository))
 })
 
 export default container

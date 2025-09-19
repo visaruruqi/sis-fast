@@ -1,5 +1,5 @@
 import { reactive, onMounted, onUnmounted, getCurrentInstance } from 'vue'
-import { observe, toJS } from 'mobx'
+import { observe, toJS, reaction } from 'mobx'
 
 /**
  * Universal MobX-Vue bridge that automatically detects and syncs all observable properties
@@ -20,16 +20,43 @@ export function useMobxBridge(mobxObject, properties = null, options = {}) {
     deep = false 
   } = options
   
-  // Auto-detect observable properties if not specified
+  // Auto-detect all members if not specified
+  let members
   if (!properties || properties === 'all') {
-    properties = autoDetectObservableProperties(mobxObject)
+    members = autoDetectObservableMembers(mobxObject)
+  } else {
+    // If specific properties are provided, categorize them
+    members = {
+      properties: properties.filter(prop => {
+        try {
+          const value = mobxObject[prop]
+          return typeof value !== 'function'
+        } catch {
+          return false
+        }
+      }),
+      getters: properties.filter(prop => {
+        const descriptor = Object.getOwnPropertyDescriptor(mobxObject, prop) || 
+                          Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), prop)
+        return descriptor && descriptor.get
+      }),
+      methods: properties.filter(prop => {
+        try {
+          return typeof mobxObject[prop] === 'function'
+        } catch {
+          return false
+        }
+      }),
+      setters: []
+    }
   }
   
   // Create Vue reactive state
   const state = reactive({})
   
-  // Initialize state with current MobX values
-  properties.forEach(prop => {
+  // Initialize reactive properties and getters with current MobX values
+  const reactiveMembers = [...members.properties, ...members.getters]
+  reactiveMembers.forEach(prop => {
     try {
       state[prop] = deep ? toJS(mobxObject[prop]) : mobxObject[prop]
     } catch (error) {
@@ -37,62 +64,90 @@ export function useMobxBridge(mobxObject, properties = null, options = {}) {
     }
   })
   
+  // Expose actions and setters directly (not reactive, but accessible)
+  members.methods.forEach(method => {
+    try {
+      // Check if this is a setter method (starts with 'set')
+      if (method.startsWith('set') && method.length > 3) {
+        const propertyName = method.charAt(3).toLowerCase() + method.slice(4)
+        const descriptor = Object.getOwnPropertyDescriptor(mobxObject, propertyName) || 
+                          Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), propertyName)
+        if (descriptor && descriptor.set) {
+          // Bind the setter
+          state[method] = descriptor.set.bind(mobxObject)
+        } else {
+          // Regular action
+          state[method] = mobxObject[method].bind(mobxObject)
+        }
+      } else {
+        // Regular action
+        state[method] = mobxObject[method].bind(mobxObject)
+      }
+    } catch (error) {
+      console.warn(`Failed to bind action ${method}:`, error)
+    }
+  })
+  
+  members.setters.forEach(setter => {
+    try {
+      const descriptor = Object.getOwnPropertyDescriptor(mobxObject, setter) || 
+                        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), setter)
+      if (descriptor && descriptor.set) {
+        state[setter] = descriptor.set.bind(mobxObject)
+      }
+    } catch (error) {
+      console.warn(`Failed to bind setter ${setter}:`, error)
+    }
+  })
+  
   // Track disposers for cleanup
   let disposers = []
-  let timeouts = new Map()
   
-  // Function to sync a specific property with optional debouncing
-  function syncProperty(prop) {
-    if (debounce > 0) {
-      if (timeouts.has(prop)) {
-        clearTimeout(timeouts.get(prop))
-      }
-      timeouts.set(prop, setTimeout(() => {
-        state[prop] = deep ? toJS(mobxObject[prop]) : mobxObject[prop]
-        timeouts.delete(prop)
-      }, debounce))
-    } else {
-      state[prop] = deep ? toJS(mobxObject[prop]) : mobxObject[prop]
-    }
-  }
-  
-  // Function to sync all properties
-  function syncAllProperties() {
-    properties.forEach(prop => {
-      try {
-        syncProperty(prop)
-      } catch (error) {
-        console.warn(`Failed to sync property ${prop}:`, error)
-      }
-    })
-  }
-  
-  // Detect computed properties that might need re-syncing
-  const computedTriggers = ['search', 'page', 'filter', 'sort', 'query']
-  
-  onMounted(() => {
-    // Create observers for each property
-    properties.forEach(prop => {
-      try {
-        disposers.push(
-          observe(mobxObject, prop, () => {
-            syncProperty(prop)
-            
-            // If this property affects computed properties and syncComputed is enabled
-            if (syncComputed && computedTriggers.includes(prop)) {
-              // Re-sync all properties to catch computed changes
-              setTimeout(syncAllProperties, 0)
-            }
-          })
-        )
-      } catch (error) {
-        console.warn(`Failed to observe property ${prop}:`, error)
-      }
-    })
-    
-    // Initial sync
-    syncAllProperties()
-  })
+        onMounted(() => {
+          // Use MobX reaction to observe only reactive members (properties and getters)
+          // Methods and setters are exposed directly without observation
+          disposers.push(
+            reaction(
+              () => {
+                // Track only reactive properties and getters
+                const trackedValues = {}
+                reactiveMembers.forEach(prop => {
+                  try {
+                    // Access the property to ensure MobX tracks it
+                    const value = mobxObject[prop]
+                    trackedValues[prop] = value
+                  } catch (error) {
+                    console.warn(`Failed to track property ${prop}:`, error)
+                  }
+                })
+                return trackedValues
+              },
+              (trackedValues) => {
+                // Update Vue reactive state when MobX state changes
+                Object.keys(trackedValues).forEach(prop => {
+                  try {
+                    // Re-access the property to get the latest value
+                    const latestValue = mobxObject[prop]
+                    state[prop] = deep ? toJS(latestValue) : latestValue
+                  } catch (error) {
+                    console.warn(`Failed to sync property ${prop}:`, error)
+                  }
+                })
+              },
+              {
+                fireImmediately: true, // Sync immediately on mount
+                equals: (a, b) => {
+                  // Custom equality check to avoid unnecessary updates
+                  if (Object.keys(a).length !== Object.keys(b).length) return false
+                  for (const key in a) {
+                    if (a[key] !== b[key]) return false
+                  }
+                  return true
+                }
+              }
+            )
+          )
+        })
   
   onUnmounted(() => {
     disposers.forEach(dispose => {
@@ -103,51 +158,142 @@ export function useMobxBridge(mobxObject, properties = null, options = {}) {
       }
     })
     disposers = []
-    
-    // Clear any pending timeouts
-    timeouts.forEach(timeout => clearTimeout(timeout))
-    timeouts.clear()
   })
   
   return state
 }
 
 /**
- * Auto-detect observable properties in a MobX object
+ * Auto-detect all members in a MobX object (properties, getters, actions, setters)
  * @param {Object} mobxObject - MobX observable object
- * @returns {Array} Array of observable property names
+ * @returns {Object} Object with categorized members
  */
-function autoDetectObservableProperties(mobxObject) {
-  const properties = []
+function autoDetectObservableMembers(mobxObject) {
+  const members = {
+    properties: [],    // Observable properties
+    getters: [],       // Computed properties (getters)
+    methods: [],       // Actions (methods that modify state)
+    setters: []        // Property setters
+  }
+  
+  // Check if this object has explicit MobX configuration
+  const hasExplicitConfig = mobxObject.$mobx && mobxObject.$mobx.values
+  if (hasExplicitConfig) {
+    // Handle explicit makeObservable configuration
+    return detectExplicitObservableMembers(mobxObject, members)
+  }
   
   // Get all enumerable properties
   for (const prop in mobxObject) {
     if (mobxObject.hasOwnProperty(prop)) {
       const descriptor = Object.getOwnPropertyDescriptor(mobxObject, prop)
       
-      // Include regular properties and getters (computed)
-      if (descriptor && (descriptor.value !== undefined || descriptor.get)) {
-        // Skip private properties (starting with _)
-        if (!prop.startsWith('_') && typeof mobxObject[prop] !== 'function') {
-          properties.push(prop)
+      if (descriptor && !prop.startsWith('_')) {
+        if (descriptor.value !== undefined) {
+          // Regular property or method
+          if (typeof mobxObject[prop] === 'function') {
+            members.methods.push(prop) // Actions (methods that modify state)
+          } else {
+            members.properties.push(prop)
+          }
+        } else if (descriptor.get) {
+          // Getter (computed property)
+          members.getters.push(prop)
         }
       }
     }
   }
   
-  // Also check prototype for getters (computed properties)
+  // Also check prototype for getters, methods, and setters
   let proto = Object.getPrototypeOf(mobxObject)
   while (proto && proto !== Object.prototype) {
     Object.getOwnPropertyNames(proto).forEach(prop => {
       const descriptor = Object.getOwnPropertyDescriptor(proto, prop)
-      if (descriptor && descriptor.get && !prop.startsWith('_') && !properties.includes(prop)) {
-        properties.push(prop)
+      if (descriptor && !prop.startsWith('_')) {
+        if (descriptor.get && !members.getters.includes(prop)) {
+          // Getter (computed property)
+          members.getters.push(prop)
+        }
+        if (descriptor.set && !members.setters.includes(prop)) {
+          // Setter - if it has both getter and setter, we expose the setter as a method
+          // If it's a pure setter (no getter), we handle it as a setter
+          if (descriptor.get) {
+            // Both getter and setter - expose setter as a method
+            members.methods.push(`set${prop.charAt(0).toUpperCase() + prop.slice(1)}`)
+          } else {
+            // Pure setter
+            members.setters.push(prop)
+          }
+        }
+        if (descriptor.value && typeof descriptor.value === 'function' && !members.methods.includes(prop)) {
+          // Action (method that modifies state)
+          members.methods.push(prop)
+        }
       }
     })
     proto = Object.getPrototypeOf(proto)
   }
   
-  return properties
+  return members
+}
+
+/**
+ * Detect members in objects with explicit makeObservable configuration
+ * @param {Object} mobxObject - MobX observable object with explicit config
+ * @param {Object} members - Members object to populate
+ * @returns {Object} Object with categorized members
+ */
+function detectExplicitObservableMembers(mobxObject, members) {
+  // Get all enumerable properties (including those defined in makeObservable)
+  for (const prop in mobxObject) {
+    if (mobxObject.hasOwnProperty(prop) && !prop.startsWith('_')) {
+      const descriptor = Object.getOwnPropertyDescriptor(mobxObject, prop)
+      
+      if (descriptor && descriptor.value !== undefined) {
+        // Regular property or method
+        if (typeof mobxObject[prop] === 'function') {
+          members.methods.push(prop) // Actions (methods that modify state)
+        } else {
+          members.properties.push(prop)
+        }
+      } else if (descriptor && descriptor.get) {
+        // Getter (computed property)
+        members.getters.push(prop)
+      }
+    }
+  }
+  
+  // Also check prototype for getters, methods, and setters
+  let proto = Object.getPrototypeOf(mobxObject)
+  while (proto && proto !== Object.prototype) {
+    Object.getOwnPropertyNames(proto).forEach(prop => {
+      const descriptor = Object.getOwnPropertyDescriptor(proto, prop)
+      if (descriptor && !prop.startsWith('_')) {
+        if (descriptor.get && !members.getters.includes(prop)) {
+          // Getter (computed property)
+          members.getters.push(prop)
+        }
+        if (descriptor.set && !members.setters.includes(prop)) {
+          // Setter - if it has both getter and setter, we expose the setter as a method
+          // If it's a pure setter (no getter), we handle it as a setter
+          if (descriptor.get) {
+            // Both getter and setter - expose setter as a method
+            members.methods.push(`set${prop.charAt(0).toUpperCase() + prop.slice(1)}`)
+          } else {
+            // Pure setter
+            members.setters.push(prop)
+          }
+        }
+        if (descriptor.value && typeof descriptor.value === 'function' && !members.methods.includes(prop)) {
+          // Action (method that modifies state)
+          members.methods.push(prop)
+        }
+      }
+    })
+    proto = Object.getPrototypeOf(proto)
+  }
+  
+  return members
 }
 
 /**

@@ -29,11 +29,18 @@
 <script setup>
 import { computed } from 'vue'
 import Layout from '../components/Layout.vue'
-import store from '../store'
+import { usePresenterState } from '../utils/mobxVueBridge'
+import container from '../di/container'
+import { TYPES } from '../di/types'
 
-const archived = computed(() => store.students.filter(s => s.status === 'Archived'))
+// Get the student repository to access student data
+const studentRepository = container.get(TYPES.StudentRepository)
+const studentState = usePresenterState(studentRepository)
 
-const restore = (s) => {
-  s.status = 'Active'
+const archived = computed(() => studentState.archivedStudents)
+
+const restore = async (s) => {
+  // Use the repository's restore method if it exists, or implement archive with status change
+  await studentRepository.save({ ...s, status: 'Active' })
 }
 </script>

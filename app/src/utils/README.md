@@ -4,10 +4,12 @@ A powerful utility that automatically bridges MobX observables with Vue reactivi
 
 ## ✨ Features
 
-- **Auto-Detection**: Automatically detects all observable properties
+- **Auto-Detection**: Automatically detects all observable properties, computed properties, actions, and setters
+- **Computed Properties Support**: Handles MobX computed properties (getters) automatically
+- **Actions & Setters Support**: Exposes all actions and setters with proper binding
 - **Multiple API Styles**: Choose your preferred syntax
 - **Error Handling**: Graceful error handling with warnings
-- **Performance Options**: Debouncing, deep copying, computed sync
+- **Performance Optimized**: Uses MobX reaction for efficient change detection
 - **Lifecycle Management**: Automatic cleanup on component unmount
 - **TypeScript Ready**: Full type support (when added)
 
@@ -54,6 +56,228 @@ const state = usePresenterState(presenter, {
   debounce: 200 
 })
 ```
+
+## 🧮 Computed Properties Support
+
+The bridge automatically handles MobX computed properties (getters):
+
+```javascript
+// In your presenter
+class StudentsPresenter {
+  search = ''
+  students = []
+  
+  constructor() {
+    makeAutoObservable(this, {}, { autoBind: true })
+  }
+  
+  // This computed property is automatically detected and synced!
+  get filteredStudents() {
+    return this.students.filter(s => 
+      s.name.toLowerCase().includes(this.search.toLowerCase())
+    )
+  }
+  
+  // This computed property is also automatically synced!
+  get studentCount() {
+    return this.filteredStudents.length
+  }
+}
+
+// In your component
+const state = usePresenterState(presenter)
+
+// Both regular and computed properties are reactive
+console.log(state.filteredStudents) // Automatically updates when search or students change
+console.log(state.studentCount)     // Automatically updates when filteredStudents changes
+```
+
+## 🔧 Complete Member Type Support
+
+The bridge handles all types of MobX members using proper MobX terminology:
+
+> **MobX Terminology**: In MobX, methods that modify observable state are called **"actions"**, not just "methods". This is important for the Fast Test Architecture as actions are the primary way to modify state in a controlled manner.
+
+### **Properties (Observable Data)**
+```javascript
+class StudentsPresenter {
+  search = ''           // ✅ Observable property
+  students = []         // ✅ Observable property
+  isLoading = false     // ✅ Observable property
+}
+```
+
+### **Computed Properties (Getters)**
+```javascript
+class StudentsPresenter {
+  get filteredStudents() {    // ✅ Computed property
+    return this.students.filter(s => 
+      s.name.toLowerCase().includes(this.search.toLowerCase())
+    )
+  }
+  
+  get studentCount() {        // ✅ Computed property
+    return this.filteredStudents.length
+  }
+}
+```
+
+### **Actions (Methods that modify state)**
+```javascript
+class StudentsPresenter {
+  openModal(student = null) {     // ✅ Action (modifies observable state)
+    this.selected = student
+    this.modalOpen = true
+  }
+  
+  save(studentData) {             // ✅ Action (modifies observable state)
+    this.repository.save(studentData)
+    this.closeModal()
+  }
+  
+  archive(student) {              // ✅ Action (modifies observable state)
+    this.repository.archive(student.id)
+  }
+}
+```
+
+### **Setters (Property Setters)**
+```javascript
+class StudentsPresenter {
+  _value = 0
+  
+  get value() {           // ✅ Getter
+    return this._value
+  }
+  
+  set value(newValue) {   // ✅ Setter (exposed as setValue method)
+    this._value = newValue
+  }
+}
+```
+
+### **Usage in Components**
+```javascript
+const state = usePresenterState(presenter)
+
+// Properties (reactive)
+console.log(state.search)        // ✅ Reactive
+console.log(state.students)      // ✅ Reactive
+console.log(state.isLoading)     // ✅ Reactive
+
+// Computed properties (reactive)
+console.log(state.filteredStudents)  // ✅ Reactive
+console.log(state.studentCount)      // ✅ Reactive
+
+// Actions (callable)
+state.openModal(student)         // ✅ Callable
+state.save(studentData)          // ✅ Callable
+state.archive(student)           // ✅ Callable
+
+// Setters (exposed as methods)
+state.setValue(42)               // ✅ Callable (from setter)
+```
+
+## 🏗️ Fast Test Architecture Context
+
+In the **Fast Test Architecture**, the bridge supports the complete separation of concerns:
+
+### **Presenter Layer (ViewModel)**
+- **Properties**: View state (`modalOpen`, `search`, `selected`)
+- **Computed Properties**: Derived state (`filteredStudents`, `isLoading`)
+- **Actions**: Business logic (`openModal()`, `save()`, `archive()`)
+- **Setters**: Property setters (`setValue()`)
+
+### **Repository Layer (Domain Model)**
+- **Properties**: Domain state (`students`, `isLoading`, `error`)
+- **Computed Properties**: Domain logic (`activeStudents`, `archivedStudents`)
+- **Actions**: Data operations (`save()`, `archive()`, `loadStudents()`)
+- **Setters**: State setters (`setLoading()`, `setError()`)
+
+### **Gateway Layer (External Interface)**
+- **Properties**: API state (`baseUrl`, `timeout`)
+- **Actions**: API calls (`createStudent()`, `updateStudent()`, `deleteStudent()`)
+
+This separation makes each layer **independently testable** and **easily mockable** for fast, reliable tests.
+
+## 🔧 Explicit makeObservable Configuration Support
+
+The bridge also supports explicit `makeObservable` configuration where you manually specify which properties are observable, computed, or actions:
+
+### **Explicit Configuration Example**
+```javascript
+class StudentsPresenter {
+  constructor() {
+    this.viewModel = { data: 'initial' }
+    this.derivedRates = { rate: 1.0 }
+    
+    makeObservable(this, {
+      viewModel: observable,
+      derivedRates: observable.ref,
+      
+      filteredRates: computed,
+      sortedRates: computed,
+      bookingSessionData: computed,
+      
+      updateViewModel: action,
+      calculateRates: action,
+      resetData: action
+    })
+  }
+  
+  get filteredRates() {
+    return this.derivedRates.rate * 2
+  }
+  
+  get sortedRates() {
+    return [this.derivedRates.rate, this.filteredRates].sort()
+  }
+  
+  get bookingSessionData() {
+    return {
+      viewModel: this.viewModel,
+      rates: this.sortedRates
+    }
+  }
+  
+  updateViewModel(newData) {
+    this.viewModel.data = newData
+  }
+  
+  calculateRates(multiplier) {
+    this.derivedRates = { rate: this.derivedRates.rate * multiplier }
+  }
+  
+  resetData() {
+    this.viewModel = { data: 'reset' }
+    this.derivedRates = { rate: 1.0 }
+  }
+}
+```
+
+### **Usage with Bridge**
+```javascript
+const state = usePresenterState(presenter)
+
+// All members are automatically detected and synced
+console.log(state.viewModel)        // ✅ Observable property
+console.log(state.derivedRates)     // ✅ Observable property
+console.log(state.filteredRates)    // ✅ Computed property
+console.log(state.sortedRates)      // ✅ Computed property
+console.log(state.bookingSessionData) // ✅ Computed property
+
+// Actions are callable
+state.updateViewModel('new data')   // ✅ Action
+state.calculateRates(2)             // ✅ Action
+state.resetData()                   // ✅ Action
+```
+
+### **Key Benefits of Explicit Configuration**
+- **Fine-grained Control**: Specify exactly which properties are observable/computed/actions
+- **Performance**: Only observe what you need
+- **Clarity**: Explicit declaration of intent
+- **Nested Objects**: Use `observable.ref` for object references
+- **Bridge Compatibility**: Works seamlessly with the MobX-Vue bridge
 
 ## ⚙️ Options
 

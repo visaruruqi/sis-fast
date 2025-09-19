@@ -23,7 +23,7 @@ Vue Components → Presenters → Repositories → Gateways → API
 
 ### 1. **Vue Components** (`src/pages/`, `src/components/`)
 - Only talk to Presenters
-- Use `Observer` from mobx-vue-lite for reactivity
+- Use `usePresenterState` from our MobX-Vue bridge for reactivity
 - Handle UI events and rendering
 
 ### 2. **Presenters** (`src/presenters/`)
@@ -167,18 +167,19 @@ const state = usePresenterState(presenter, 'full') // or 'modal', 'list', 'pagin
 ### Modal Pattern
 ```vue
 <template>
-  <SomeModal v-if="presenter.modalOpen" 
-             :data="presenter.selected" 
+  <SomeModal v-if="state.modalOpen" 
+             :data="state.selected" 
              @save="presenter.save" 
              @close="presenter.closeModal" />
 </template>
 
 <script setup>
-import { Observer } from 'mobx-vue-lite'
+import { usePresenterState } from '../utils/mobxVueBridge'
 import container from '../di/container'
 import { TYPES } from '../di/types'
 
 const presenter = container.get(TYPES.SomePresenter)
+const state = usePresenterState(presenter)
 </script>
 ```
 

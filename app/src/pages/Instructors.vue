@@ -12,10 +12,17 @@
 <script setup>
 import { computed } from 'vue'
 import Layout from '../components/Layout.vue'
-import store from '../store'
+import { usePresenterState } from '../utils/mobxVueBridge'
+import container from '../di/container'
+import { TYPES } from '../di/types'
 
+// Get the course repository to access course data
+const courseRepository = container.get(TYPES.CourseRepository)
+const state = usePresenterState(courseRepository)
+
+// Extract unique instructor names from courses
 const instructors = computed(() => {
-  const names = new Set(store.courses.map(c => c.instructor))
+  const names = new Set(state.courses.map(c => c.instructor))
   return Array.from(names)
 })
 </script>

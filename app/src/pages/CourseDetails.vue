@@ -1,9 +1,9 @@
 <template>
   <Layout>
-    <div v-if="course">
-      <h3>{{ course.name }} ({{ course.code }})</h3>
-      <p>Credits: {{ course.credits }}</p>
-      <p>Instructor: {{ course.instructor }}</p>
+    <div v-if="state.course">
+      <h3>{{ state.course.name }} ({{ state.course.code }})</h3>
+      <p>Credits: {{ state.course.credits }}</p>
+      <p>Instructor: {{ state.course.instructor }}</p>
 
       <h4 class="mt-4">Enrolled Students</h4>
       <table class="table">
@@ -15,8 +15,8 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="e in courseEnrollments" :key="e.id">
-            <td>{{ studentName(e.studentId) }}</td>
+          <tr v-for="e in state.courseEnrollments" :key="e.id">
+            <td>{{ presenter.getStudentName(e.studentId) }}</td>
             <td>{{ e.semester }}</td>
             <td>{{ e.grade || '-' }}</td>
           </tr>
@@ -27,18 +27,22 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import Layout from '../components/Layout.vue'
-import store from '../store'
+import { usePresenterState } from '../utils/mobxVueBridge'
+import container from '../di/container'
+import { TYPES } from '../di/types'
 
 const route = useRoute()
 const id = route.params.id
 
-const course = computed(() => store.courses.find(c => c.id === id))
-const courseEnrollments = computed(() => store.enrollments.filter(e => e.courseId === id))
-const studentName = (sid) => {
-  const s = store.students.find(s => s.id === sid)
-  return s ? `${s.firstName} ${s.lastName}` : ''
-}
+// Get the course details presenter
+const presenter = container.get(TYPES.CourseDetailsPresenter)
+const state = usePresenterState(presenter)
+
+// Initialize the presenter when component mounts
+onMounted(async () => {
+  await presenter.initialize(id)
+})
 </script>

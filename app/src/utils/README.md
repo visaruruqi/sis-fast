@@ -1,6 +1,6 @@
 # Universal MobX-Vue Bridge
 
-A powerful utility that automatically bridges MobX observables with Vue reactivity, solving the integration issues with `mobx-vue-lite`.
+A powerful utility that automatically bridges MobX observables with Vue reactivity, providing seamless integration between MobX and Vue.
 
 ## ✨ Features
 
@@ -376,22 +376,33 @@ onMounted(() => {
 const state = usePresenterState(presenter, ['modalOpen', 'search'])
 ```
 
-### From mobx-vue-lite Observer
+### From Manual MobX Integration
 ```vue
-<!-- Before -->
-<template>
-  <Observer>
-    <div>{{ presenter.modalOpen }}</div>
-  </Observer>
-</template>
-
-<!-- After -->
+<!-- Before (Manual) -->
 <template>
   <div>{{ state.modalOpen }}</div>
 </template>
 
 <script setup>
-const state = usePresenterState(presenter, 'all')
+import { reactive, onMounted } from 'vue'
+import { observe } from 'mobx'
+
+const state = reactive({ modalOpen: false })
+
+onMounted(() => {
+  observe(presenter, 'modalOpen', () => {
+    state.modalOpen = presenter.modalOpen
+  })
+})
+</script>
+
+<!-- After (Bridge) -->
+<template>
+  <div>{{ state.modalOpen }}</div>
+</template>
+
+<script setup>
+const state = usePresenterState(presenter)
 </script>
 ```
 

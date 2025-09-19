@@ -1,14 +1,19 @@
-import { makeAutoObservable } from 'mobx'
+import { makeObservable, observable, action, computed } from 'mobx'
 import Guard from 'guardflow'
+import { BaseRepository } from '../../../core/BaseRepository.js'
 
-export default class CourseRepository {
+export default class CourseRepository extends BaseRepository {
   courses = []
-  isLoading = false
-  error = null
 
   constructor(gateway) {
-    this.gateway = gateway
-    makeAutoObservable(this, {}, { autoBind: true })
+    super(gateway)
+    makeObservable(this, {
+      courses: observable,
+      allCourses: computed,
+      loadCourses: action,
+      save: action,
+      delete: action
+    })
     this.loadCourses()
   }
 
@@ -19,17 +24,9 @@ export default class CourseRepository {
 
   // Load courses from gateway (API)
   async loadCourses() {
-    this.isLoading = true
-    this.error = null
-    try {
-      const courses = await this.gateway.fetchCourses()
-      this.courses = courses
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to load courses:', error)
-    } finally {
-      this.isLoading = false
-    }
+    return this.executeWithLoading(async () => {
+      this.courses = await this.gateway.fetchCourses()
+    })
   }
 
   // Get course by ID
@@ -44,10 +41,7 @@ export default class CourseRepository {
     Guard.Against.NullOrWhiteSpace(course.instructor, 'instructor')
     Guard.Against.NullOrUndefined(course.credits, 'credits')
 
-    this.isLoading = true
-    this.error = null
-
-    try {
+    return this.executeWithLoading(async () => {
       if (course.id) {
         // Update existing course
         const idx = this.courses.findIndex(c => c.id === course.id)
@@ -61,28 +55,15 @@ export default class CourseRepository {
         this.courses.push(course)
         // In real app, would call gateway.createCourse(course)
       }
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to save course:', error)
-    } finally {
-      this.isLoading = false
-    }
+    })
   }
 
   // Delete course
   async delete(id) {
-    this.isLoading = true
-    this.error = null
-
-    try {
+    return this.executeWithLoading(async () => {
       this.courses = this.courses.filter(c => c.id !== id)
       // In real app, would call gateway.deleteCourse(id)
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to delete course:', error)
-    } finally {
-      this.isLoading = false
-    }
+    })
   }
 
   // Search courses

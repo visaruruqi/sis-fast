@@ -1,19 +1,30 @@
-import { makeAutoObservable } from 'mobx'
+import { makeObservable, observable, action, computed, override } from 'mobx'
+import { BasePresenter } from '../../../core/BasePresenter.js'
 
 /**
  * StudentDetailsPresenter - Business logic for student details page
  * Following Fast Test Architecture pattern
  */
-export default class StudentDetailsPresenter {
+export default class StudentDetailsPresenter extends BasePresenter {
   studentId = null
-  isLoading = false
-  error = null
 
   constructor(studentRepository, enrollmentRepository, courseRepository) {
-    this.studentRepository = studentRepository
+    super(studentRepository) // Use studentRepository as the primary repository
     this.enrollmentRepository = enrollmentRepository
     this.courseRepository = courseRepository
-    makeAutoObservable(this, {}, { autoBind: true })
+    makeObservable(this, {
+      studentId: observable,
+      student: computed,
+      studentEnrollments: computed,
+      getCourseName: action,
+      enrollStudent: action,
+      refresh: override
+    })
+  }
+
+  // Getter for backward compatibility with tests
+  get studentRepository() {
+    return this.repository
   }
 
   /**
@@ -22,9 +33,7 @@ export default class StudentDetailsPresenter {
    */
   async initialize(studentId) {
     this.studentId = studentId
-    this.isLoading = true
-    this.error = null
-
+    // Presenters don't have their own loading state - they use repository loading states
     try {
       // Load enrollments and courses for this student
       await Promise.all([
@@ -32,10 +41,8 @@ export default class StudentDetailsPresenter {
         this.courseRepository.loadCourses()
       ])
     } catch (error) {
-      this.error = error.message
       console.error('Failed to load student details:', error)
-    } finally {
-      this.isLoading = false
+      throw error
     }
   }
 
@@ -45,7 +52,7 @@ export default class StudentDetailsPresenter {
    */
   get student() {
     if (!this.studentId) return null
-    return this.studentRepository.allStudents.find(s => s.id === this.studentId) || null
+    return this.repository.allStudents.find(s => s.id === this.studentId) || null
   }
 
   /**

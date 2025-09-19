@@ -31,7 +31,7 @@
     <StudentModal 
       v-if="state.modalOpen" 
       :student="state.selected" 
-      :onSave="presenter.save"
+      :onSave="(studentData) => presenter.save(studentData)"
       @close="presenter.closeModal" 
     />
   </Layout>

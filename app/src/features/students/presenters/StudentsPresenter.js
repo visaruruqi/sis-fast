@@ -1,13 +1,27 @@
-import { makeAutoObservable } from 'mobx'
+import { makeObservable, computed, action, observable, override } from 'mobx'
+import { BasePresenter } from '../../../core/BasePresenter.js'
+import { STATUS } from '../../../core/constants.js'
 
-export default class StudentsPresenter {
+export default class StudentsPresenter extends BasePresenter {
   search = ''
   selected = null
   modalOpen = false
 
   constructor(repository) {
-    this.repository = repository
-    makeAutoObservable(this, {}, { autoBind: true })
+    super(repository)
+    makeObservable(this, {
+      search: observable,
+      selected: observable,
+      modalOpen: observable,
+      filtered: computed,
+      setSearch: action,
+      clearSearch: action,
+      openModal: action,
+      closeModal: action,
+      save: action,
+      archive: action,
+      refresh: override
+    })
   }
 
   // Observable computed property that reacts to repository changes
@@ -15,17 +29,16 @@ export default class StudentsPresenter {
     if (!this.search) {
       return this.repository.activeStudents
     }
-    return this.repository.searchStudents(this.search).filter(s => s.status === 'Active')
+    return this.repository.searchStudents(this.search).filter(s => s.status === STATUS.ACTIVE)
   }
 
-  // Observable computed property for loading state
-  get isLoading() {
-    return this.repository.isLoading
+  // Search functionality specific to this presenter
+  setSearch(searchTerm) {
+    this.search = searchTerm
   }
 
-  // Observable computed property for error state
-  get error() {
-    return this.repository.error
+  clearSearch() {
+    this.search = ''
   }
 
   // Open modal for adding/editing student
@@ -34,7 +47,7 @@ export default class StudentsPresenter {
     this.modalOpen = true
   }
 
-  // Close modal
+  // Close modal and reset state
   closeModal() {
     this.modalOpen = false
     this.selected = null

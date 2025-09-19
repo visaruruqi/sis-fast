@@ -118,7 +118,7 @@ const hideModal = () => {
 }
 
 const handleSave = async () => {
-  await presenter.save(props.onSave || (() => {}))
+  await presenter.save(props.onSave)
   hideModal()
 }
 

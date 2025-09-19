@@ -1,15 +1,33 @@
-import { makeAutoObservable } from 'mobx'
+import { makeObservable, computed, action, observable, override } from 'mobx'
+import { BasePresenter } from '../../../core/BasePresenter.js'
+import { PAGINATION } from '../../../core/constants.js'
 
-export default class CoursesPresenter {
+export default class CoursesPresenter extends BasePresenter {
   search = ''
   selected = null
   modalOpen = false
   page = 1
-  pageSize = 10
+  pageSize = PAGINATION.DEFAULT_PAGE_SIZE
 
   constructor(repository) {
-    this.repository = repository
-    makeAutoObservable(this, {}, { autoBind: true })
+    super(repository)
+    makeObservable(this, {
+      search: observable,
+      selected: observable,
+      modalOpen: observable,
+      page: observable,
+      pageSize: observable,
+      filtered: computed,
+      totalPages: computed,
+      paginated: computed,
+      setSearch: action,
+      clearSearch: action,
+      openModal: action,
+      closeModal: action,
+      save: action,
+      delete: action,
+      refresh: override
+    })
   }
 
   // Observable computed property that reacts to repository changes
@@ -29,14 +47,15 @@ export default class CoursesPresenter {
     return this.filtered.slice(start, start + this.pageSize)
   }
 
-  // Observable computed property for loading state
-  get isLoading() {
-    return this.repository.isLoading
+  // Search functionality specific to this presenter
+  setSearch(searchTerm) {
+    this.search = searchTerm
+    // Reset to first page when searching
+    this.page = 1
   }
 
-  // Observable computed property for error state
-  get error() {
-    return this.repository.error
+  clearSearch() {
+    this.search = ''
   }
 
   openModal(course = null) {
@@ -80,14 +99,9 @@ export default class CoursesPresenter {
     }
   }
 
-  setSearch(value) {
-    this.search = value
-    // Reset to first page when searching
-    this.page = 1
-  }
-
-  // Refresh courses from repository
+  // Override base class refresh method with specific implementation
   async refresh() {
     await this.repository.loadCourses()
   }
+
 }

@@ -1,17 +1,23 @@
-import { makeAutoObservable } from 'mobx'
+import { makeObservable, observable, action, computed } from 'mobx'
+import { BaseRepository } from '../../../core/BaseRepository.js'
 
 /**
  * EnrollmentRepository - Observable data store for enrollments
  * Following Fast Test Architecture pattern
  */
-export default class EnrollmentRepository {
+export default class EnrollmentRepository extends BaseRepository {
   enrollments = []
-  isLoading = false
-  error = null
 
   constructor(gateway) {
-    this.gateway = gateway
-    makeAutoObservable(this, {}, { autoBind: true })
+    super(gateway)
+    makeObservable(this, {
+      enrollments: observable,
+      allEnrollments: computed,
+      loadEnrollments: action,
+      createEnrollment: action,
+      updateEnrollment: action,
+      deleteEnrollment: action
+    })
   }
 
   /**
@@ -53,18 +59,9 @@ export default class EnrollmentRepository {
    * Load all enrollments from the gateway
    */
   async loadEnrollments() {
-    this.isLoading = true
-    this.error = null
-    
-    try {
-      const enrollments = await this.gateway.getAllEnrollments()
-      this.enrollments = enrollments
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to load enrollments:', error)
-    } finally {
-      this.isLoading = false
-    }
+    return this.executeWithLoading(async () => {
+      this.enrollments = await this.gateway.getAllEnrollments()
+    })
   }
 
   /**
@@ -73,20 +70,11 @@ export default class EnrollmentRepository {
    * @returns {Promise<Object>} Created enrollment
    */
   async createEnrollment(enrollmentData) {
-    this.isLoading = true
-    this.error = null
-    
-    try {
+    return this.executeWithLoading(async () => {
       const newEnrollment = await this.gateway.createEnrollment(enrollmentData)
       this.enrollments.push(newEnrollment)
       return newEnrollment
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to create enrollment:', error)
-      throw error
-    } finally {
-      this.isLoading = false
-    }
+    })
   }
 
   /**
@@ -96,23 +84,14 @@ export default class EnrollmentRepository {
    * @returns {Promise<Object>} Updated enrollment
    */
   async updateEnrollment(id, enrollmentData) {
-    this.isLoading = true
-    this.error = null
-    
-    try {
+    return this.executeWithLoading(async () => {
       const updatedEnrollment = await this.gateway.updateEnrollment(id, enrollmentData)
       const index = this.enrollments.findIndex(enrollment => enrollment.id === id)
       if (index !== -1) {
         this.enrollments[index] = updatedEnrollment
       }
       return updatedEnrollment
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to update enrollment:', error)
-      throw error
-    } finally {
-      this.isLoading = false
-    }
+    })
   }
 
   /**
@@ -121,22 +100,13 @@ export default class EnrollmentRepository {
    * @returns {Promise<boolean>} Success status
    */
   async deleteEnrollment(id) {
-    this.isLoading = true
-    this.error = null
-    
-    try {
+    return this.executeWithLoading(async () => {
       const success = await this.gateway.deleteEnrollment(id)
       if (success) {
         this.enrollments = this.enrollments.filter(enrollment => enrollment.id !== id)
       }
       return success
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to delete enrollment:', error)
-      throw error
-    } finally {
-      this.isLoading = false
-    }
+    })
   }
 
   /**

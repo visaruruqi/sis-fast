@@ -1,14 +1,22 @@
-import { makeAutoObservable } from 'mobx'
+import { makeObservable, observable, action, computed } from 'mobx'
 import Guard from 'guardflow'
+import { BaseRepository } from '../../../core/BaseRepository.js'
+import { STATUS } from '../../../core/constants.js'
 
-export default class StudentRepository {
+export default class StudentRepository extends BaseRepository {
   students = []
-  isLoading = false
-  error = null
 
   constructor(gateway) {
-    this.gateway = gateway
-    makeAutoObservable(this, {}, { autoBind: true })
+    super(gateway)
+    makeObservable(this, {
+      students: observable,
+      allStudents: computed,
+      activeStudents: computed,
+      archivedStudents: computed,
+      loadStudents: action,
+      save: action,
+      archive: action
+    })
     this.loadStudents()
   }
 
@@ -19,27 +27,19 @@ export default class StudentRepository {
 
   // Observable getter for active students
   get activeStudents() {
-    return this.students.filter(s => s.status === 'Active')
+    return this.students.filter(s => s.status === STATUS.ACTIVE)
   }
 
   // Observable getter for archived students
   get archivedStudents() {
-    return this.students.filter(s => s.status === 'Archived')
+    return this.students.filter(s => s.status === STATUS.ARCHIVED)
   }
 
   // Load students from gateway (API)
   async loadStudents() {
-    this.isLoading = true
-    this.error = null
-    try {
-      const students = await this.gateway.fetchStudents()
-      this.students = students
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to load students:', error)
-    } finally {
-      this.isLoading = false
-    }
+    return this.executeWithLoading(async () => {
+      this.students = await this.gateway.fetchStudents()
+    })
   }
 
   // Save student (create or update)
@@ -48,10 +48,7 @@ export default class StudentRepository {
     Guard.Against.NullOrWhiteSpace(student.lastName, 'lastName')
     Guard.Against.NullOrWhiteSpace(student.email, 'email')
 
-    this.isLoading = true
-    this.error = null
-
-    try {
+    return this.executeWithLoading(async () => {
       if (student.id) {
         // Update existing student
         const idx = this.students.findIndex(s => s.id === student.id)
@@ -65,31 +62,18 @@ export default class StudentRepository {
         this.students.push(student)
         // In real app, would call gateway.createStudent(student)
       }
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to save student:', error)
-    } finally {
-      this.isLoading = false
-    }
+    })
   }
 
   // Archive student
   async archive(id) {
-    this.isLoading = true
-    this.error = null
-
-    try {
+    return this.executeWithLoading(async () => {
       const student = this.students.find(s => s.id === id)
       if (student) {
-        student.status = 'Archived'
+        student.status = STATUS.ARCHIVED
         // In real app, would call gateway.archiveStudent(id)
       }
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to archive student:', error)
-    } finally {
-      this.isLoading = false
-    }
+    })
   }
 
   // Get student by ID

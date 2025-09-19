@@ -1,6 +1,10 @@
 export const TYPES = {
-  Store: Symbol('Store'),
   StudentGateway: Symbol('StudentGateway'),
   StudentRepository: Symbol('StudentRepository'),
-  StudentsPresenter: Symbol('StudentsPresenter')
+  StudentsPresenter: Symbol('StudentsPresenter'),
+  StudentModalPresenter: Symbol('StudentModalPresenter'),
+  CourseGateway: Symbol('CourseGateway'),
+  CourseRepository: Symbol('CourseRepository'),
+  CoursesPresenter: Symbol('CoursesPresenter'),
+  CourseModalPresenter: Symbol('CourseModalPresenter')
 }

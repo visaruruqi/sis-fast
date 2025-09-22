@@ -58,7 +58,24 @@ export function useMobxBridge(mobxObject, properties = null, options = {}) {
   const reactiveMembers = [...members.properties, ...members.getters]
   reactiveMembers.forEach(prop => {
     try {
-      state[prop] = deep ? toJS(mobxObject[prop]) : mobxObject[prop]
+      // Create a two-way binding for properties (not getters)
+      if (members.properties.includes(prop)) {
+        // For properties: create getter/setter that syncs with MobX
+        Object.defineProperty(state, prop, {
+          get() {
+            return deep ? toJS(mobxObject[prop]) : mobxObject[prop]
+          },
+          set(value) {
+            // Update MobX property directly
+            mobxObject[prop] = value
+          },
+          enumerable: true,
+          configurable: true
+        })
+      } else {
+        // For getters: read-only access
+        state[prop] = deep ? toJS(mobxObject[prop]) : mobxObject[prop]
+      }
     } catch (error) {
       console.warn(`Failed to initialize property ${prop}:`, error)
     }
@@ -104,29 +121,31 @@ export function useMobxBridge(mobxObject, properties = null, options = {}) {
   let disposers = []
   
         onMounted(() => {
-          // Use MobX reaction to observe only reactive members (properties and getters)
+          // Use MobX reaction to observe only getters (properties are handled by getter/setter)
           // Methods and setters are exposed directly without observation
-          disposers.push(
-            reaction(
-              () => {
-                // Track only reactive properties and getters
-                const trackedValues = {}
-                reactiveMembers.forEach(prop => {
-                  try {
-                    // Access the property to ensure MobX tracks it
-                    const value = mobxObject[prop]
-                    trackedValues[prop] = value
-                  } catch (error) {
-                    console.warn(`Failed to track property ${prop}:`, error)
-                  }
-                })
-                return trackedValues
-              },
-              (trackedValues) => {
-                // Update Vue reactive state when MobX state changes
-                Object.keys(trackedValues).forEach(prop => {
-                  try {
-                    // Re-access the property to get the latest value
+          const getterMembers = members.getters
+          if (getterMembers.length > 0) {
+            disposers.push(
+              reaction(
+                () => {
+                  // Track only getters
+                  const trackedValues = {}
+                  getterMembers.forEach(prop => {
+                    try {
+                      // Access the property to ensure MobX tracks it
+                      const value = mobxObject[prop]
+                      trackedValues[prop] = value
+                    } catch (error) {
+                      console.warn(`Failed to track getter ${prop}:`, error)
+                    }
+                  })
+                  return trackedValues
+                },
+                (trackedValues) => {
+                  // Update Vue reactive state when MobX getters change
+                  Object.keys(trackedValues).forEach(prop => {
+                    try {
+                      // Re-access the property to get the latest value
                     const latestValue = mobxObject[prop]
                     state[prop] = deep ? toJS(latestValue) : latestValue
                   } catch (error) {
@@ -147,6 +166,7 @@ export function useMobxBridge(mobxObject, properties = null, options = {}) {
               }
             )
           )
+          }
         })
   
   onUnmounted(() => {

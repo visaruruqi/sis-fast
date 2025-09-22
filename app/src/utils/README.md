@@ -7,6 +7,8 @@ A powerful utility that automatically bridges MobX observables with Vue reactivi
 - **Auto-Detection**: Automatically detects all observable properties, computed properties, actions, and setters
 - **Computed Properties Support**: Handles MobX computed properties (getters) automatically
 - **Actions & Setters Support**: Exposes all actions and setters with proper binding
+- **Safety Modes**: Control direct state mutation with different binding modes
+- **Two-Way Binding**: Default mode allows direct mutation for convenience
 - **Multiple API Styles**: Choose your preferred syntax
 - **Error Handling**: Graceful error handling with warnings
 - **Performance Optimized**: Uses MobX reaction for efficient change detection
@@ -39,6 +41,48 @@ const state = usePresenterState(presenter, {
   deep: true,           // Deep copy objects using toJS()
   syncComputed: true    // Auto-sync computed properties
 })
+```
+
+## 🔒 Safety Modes
+
+The bridge supports different binding modes to control direct state mutation:
+
+### Default: Two-Way Mode (Convenience)
+```javascript
+// Default behavior - allows direct mutation for convenience
+const state = usePresenterState(presenter)
+state.search = 'new value'  // ✅ Works - direct mutation allowed
+```
+
+### Read-Only Mode (Safety)
+```javascript
+// Block direct mutation, but allow actions
+const state = usePresenterState(presenter, null, {
+  mode: 'read-only',
+  allowDirectMutation: false
+})
+state.search = 'new value'  // ❌ Blocked - use actions instead
+state.setSearch('new value')  // ✅ Works - action allowed
+```
+
+### Action-Only Mode (Maximum Safety)
+```javascript
+// Block direct mutation, enforce validation through actions
+const state = usePresenterState(presenter, null, {
+  mode: 'action-only',
+  allowDirectMutation: false
+})
+state.search = 'new value'  // ❌ Blocked - use actions instead
+state.setSearch('new value')  // ✅ Works - action with validation
+```
+
+### Mixed Mode (Selective Protection)
+```javascript
+// Allow direct mutation for safe properties, block for sensitive ones
+const state = usePresenterState(presenter, ['search', 'modalOpen'], {
+  mode: 'two-way'  // Only for specified safe properties
+})
+// Add sensitive properties with action-only protection manually
 ```
 
 ## 🎯 Three Simple Ways to Use
@@ -353,6 +397,53 @@ The bridge includes comprehensive error handling:
 - Catches observer creation errors
 - Handles disposal errors gracefully
 - Continues working even if some properties fail
+
+## 📝 Changelog
+
+### v2.0.0 - Safety Modes & Enhanced Architecture
+
+#### ✨ New Features
+- **Safety Modes**: Added support for different binding modes to control direct state mutation
+  - `two-way` mode (default): Allows direct mutation for convenience
+  - `read-only` mode: Blocks direct mutation, allows actions
+  - `action-only` mode: Blocks direct mutation, enforces validation through actions
+  - `mixed` mode: Selective protection for different properties
+- **Enhanced Options**: Added `allowDirectMutation` and `onDirectMutation` options
+- **Improved Documentation**: Comprehensive examples and safety guidelines
+
+#### 🔧 Configuration Changes
+- **Default Behavior**: `allowDirectMutation = true` by default for backward compatibility
+- **Mode System**: `mode = 'two-way'` by default for convenience
+- **Deep Option**: `deep = false` by default to maintain MobX reactivity
+
+#### 🛡️ Safety Improvements
+- **Direct Mutation Control**: Can now block dangerous direct mutations
+- **Validation Enforcement**: Actions can enforce business rules and validation
+- **Audit Trail**: Callback system for tracking direct mutations
+- **Environment-Based Configuration**: Different rules for dev vs production
+
+#### 📚 Documentation Updates
+- Added comprehensive safety modes documentation
+- Included examples for different use cases
+- Added migration guide for existing code
+- Enhanced API documentation with all options
+
+#### 🧪 Testing
+- Added comprehensive test suite for all binding modes
+- Safety tests demonstrating risks and solutions
+- Integration tests for Vue component usage
+- Nested object reactivity tests
+
+#### 🔄 Backward Compatibility
+- **100% backward compatible** - existing code continues to work unchanged
+- Default behavior maintains current functionality
+- New features are opt-in only
+
+### v1.0.0 - Initial Release
+- Basic MobX-Vue bridge functionality
+- Auto-detection of observable properties
+- Two-way binding support
+- Vue reactivity integration
 
 ## 🎯 Migration Guide
 

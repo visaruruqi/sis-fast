@@ -10,6 +10,9 @@ import { observe, toJS, reaction } from 'mobx'
  *   - String preset: 'all', 'modal', 'list', 'pagination'
  *   - null/undefined: auto-detect all observable properties
  * @param {Object} options - Configuration options
+ * @param {string} options.mode - Binding mode: 'two-way' (default), 'read-only', 'action-only'
+ * @param {boolean} options.allowDirectMutation - Allow direct state mutation (default: true for convenience)
+ * @param {Function} options.onDirectMutation - Callback when direct mutation occurs
  * @returns {Object} Vue reactive state that mirrors MobX state
  */
 export function useMobxBridge(mobxObject, properties = null, options = {}) {
@@ -17,7 +20,10 @@ export function useMobxBridge(mobxObject, properties = null, options = {}) {
     autoDetect = true,
     syncComputed = true,
     debounce = 0,
-    deep = false 
+    deep = false,
+    mode = 'two-way',  // 'two-way', 'read-only', 'action-only'
+    allowDirectMutation = true,  // Default to true for convenience
+    onDirectMutation = null
   } = options
   
   // Auto-detect all members if not specified
@@ -58,14 +64,45 @@ export function useMobxBridge(mobxObject, properties = null, options = {}) {
   const reactiveMembers = [...members.properties, ...members.getters]
   reactiveMembers.forEach(prop => {
     try {
-      // Create a two-way binding for properties (not getters)
+      // Create binding based on mode and property type
       if (members.properties.includes(prop)) {
-        // For properties: create getter/setter that syncs with MobX
+        // For observable properties: create binding based on mode
         Object.defineProperty(state, prop, {
           get() {
             return deep ? toJS(mobxObject[prop]) : mobxObject[prop]
           },
           set(value) {
+            // Handle different binding modes
+            if (mode === 'read-only') {
+              console.warn(`Direct mutation of '${prop}' is disabled. Use actions instead.`)
+              if (onDirectMutation) {
+                onDirectMutation(prop, value, 'read-only')
+              }
+              return
+            }
+            
+            if (mode === 'action-only') {
+              console.warn(`Direct mutation of '${prop}' is disabled. Use actions instead.`)
+              if (onDirectMutation) {
+                onDirectMutation(prop, value, 'action-only')
+              }
+              return
+            }
+            
+            // Mode: 'two-way' (default)
+            if (!allowDirectMutation) {
+              console.warn(`Direct mutation of '${prop}' is disabled. Use actions instead.`)
+              if (onDirectMutation) {
+                onDirectMutation(prop, value, 'disabled')
+              }
+              return
+            }
+            
+            // Log direct mutation for debugging
+            if (onDirectMutation) {
+              onDirectMutation(prop, value, 'direct')
+            }
+            
             // Update MobX property directly
             mobxObject[prop] = value
           },
@@ -73,7 +110,7 @@ export function useMobxBridge(mobxObject, properties = null, options = {}) {
           configurable: true
         })
       } else {
-        // For getters: read-only access
+        // For getters: always read-only access
         state[prop] = deep ? toJS(mobxObject[prop]) : mobxObject[prop]
       }
     } catch (error) {

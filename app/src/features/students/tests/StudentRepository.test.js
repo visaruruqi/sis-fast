@@ -23,7 +23,17 @@ describe('StudentRepository', () => {
           email: 'jane.smith@example.com',
           status: 'Active'
         }
-      ])
+      ]),
+      createStudent: vi.fn().mockImplementation((studentData) => {
+        const newStudent = { ...studentData, id: 'stu' + Math.random().toString().slice(2,8) }
+        return Promise.resolve(newStudent)
+      }),
+      updateStudent: vi.fn().mockImplementation((studentData) => {
+        return Promise.resolve(studentData)
+      }),
+      archiveStudent: vi.fn().mockImplementation((id) => {
+        return Promise.resolve({ id, status: 'Archived' })
+      })
     }
 
     repository = new StudentRepository(mockGateway)
@@ -88,8 +98,11 @@ describe('StudentRepository', () => {
         await repository.save(newStudent)
         
         expect(repository.students).toHaveLength(initialLength + 1)
-        expect(newStudent.id).toMatch(/^stu\d{6}$/)
-        expect(repository.students[repository.students.length - 1]).toEqual(newStudent)
+        const savedStudent = repository.students[repository.students.length - 1]
+        expect(savedStudent.id).toMatch(/^stu\d{6}$/)
+        expect(savedStudent.firstName).toBe(newStudent.firstName)
+        expect(savedStudent.lastName).toBe(newStudent.lastName)
+        expect(savedStudent.email).toBe(newStudent.email)
       })
 
       it('should validate required fields for new student', async () => {

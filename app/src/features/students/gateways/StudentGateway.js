@@ -1,8 +1,7 @@
 export default class StudentGateway {
-  async fetchStudents() {
-    // Simulate API call with initial data
-    // In real app, this would be: return fetch('/api/students').then(r => r.json())
-    return [
+  constructor() {
+    // Maintain state in the gateway to persist data across navigation
+    this.students = [
       {
         id: 'stu001',
         firstName: 'Arben',
@@ -64,8 +63,33 @@ export default class StudentGateway {
     return student
   }
 
+  async fetchStudents() {
+    // Return the current state instead of hardcoded data
+    return [...this.students]
+  }
+
+  async createStudent(studentData) {
+    // Add new student to the gateway's state
+    const newStudent = { ...studentData, id: 'stu' + Math.random().toString().slice(2,8) }
+    this.students.push(newStudent)
+    return newStudent
+  }
+
+  async updateStudent(studentData) {
+    // Update student in the gateway's state
+    const index = this.students.findIndex(s => s.id === studentData.id)
+    if (index !== -1) {
+      this.students[index] = studentData
+    }
+    return studentData
+  }
+
   async archiveStudent(id) {
-    // Simulate API call
-    return { id, status: 'Archived' }
+    // Archive student in the gateway's state
+    const student = this.students.find(s => s.id === id)
+    if (student) {
+      student.status = 'Archived'
+    }
+    return student
   }
 }

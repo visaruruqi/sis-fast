@@ -1,5 +1,4 @@
 import { makeAutoObservable } from 'mobx'
-import Guard from 'guardflow'
 
 export default class CourseModalPresenter {
   form = {
@@ -7,22 +6,49 @@ export default class CourseModalPresenter {
     name: '',
     code: '',
     credits: 0,
-    instructor: '',
+    instructorId: '',
     description: ''
   }
   errors = {}
   isSubmitting = false
   modalTitle = 'Add Course'
   isEdit = false
+  instructorOptions = []
 
-  constructor() {
+  constructor(instructorRepository) {
+    this.instructorRepository = instructorRepository
     makeAutoObservable(this, {}, { autoBind: true })
   }
 
-  open(course = null) {
+  async loadInstructorOptions() {
+    try {
+      await this.instructorRepository.loadInstructors()
+      this.instructorOptions = this.instructorRepository.getInstructorOptions()
+    } catch (error) {
+      console.error('Failed to load instructor options:', error)
+      this.instructorOptions = []
+    }
+  }
+
+  async open(course = null) {
     this.resetForm()
+    
+    // Load instructor options when modal opens
+    await this.loadInstructorOptions()
+    
     if (course) {
-      Object.assign(this.form, course)
+      // Handle both old and new course data structure
+      const courseData = { ...course }
+      
+      // If course has old 'instructor' field, convert it to 'instructorId'
+      if (courseData.instructor && !courseData.instructorId) {
+        // For now, we'll need to find the instructor by name
+        // This is a temporary fix - in a real app, you'd want to migrate the data
+        courseData.instructorId = courseData.instructor
+        delete courseData.instructor
+      }
+      
+      Object.assign(this.form, courseData)
       this.isEdit = true
       this.modalTitle = 'Edit Course'
     } else {
@@ -48,18 +74,22 @@ export default class CourseModalPresenter {
   validate() {
     this.errors = {}
     
-    if (Guard.Against.NullOrWhiteSpace(this.form.name)) {
+    // Check if name is null, undefined, or whitespace
+    if (!this.form.name || this.form.name.trim() === '') {
       this.errors.name = 'Course name is required.'
     }
     
-    if (Guard.Against.NullOrWhiteSpace(this.form.code)) {
+    // Check if code is null, undefined, or whitespace
+    if (!this.form.code || this.form.code.trim() === '') {
       this.errors.code = 'Course code is required.'
     }
     
-    if (Guard.Against.NullOrWhiteSpace(this.form.instructor)) {
-      this.errors.instructor = 'Instructor is required.'
+    // Check if instructorId is null, undefined, or whitespace
+    if (!this.form.instructorId || this.form.instructorId.trim() === '') {
+      this.errors.instructorId = 'Instructor is required.'
     }
     
+    // Check if credits is valid
     if (!this.form.credits || this.form.credits <= 0) {
       this.errors.credits = 'Credits must be greater than 0.'
     }
@@ -72,20 +102,18 @@ export default class CourseModalPresenter {
     return Object.keys(this.errors).length === 0
   }
 
-  async save(onSaveCallback) {
+  async save() {
     if (!this.validate()) {
       return
     }
 
     this.isSubmitting = true
     try {
-      // Simulate async save operation
-      await new Promise(resolve => setTimeout(resolve, 300))
-      onSaveCallback({ ...this.form })
-      this.close()
+      // Return the form data so the parent can save it
+      return { ...this.form }
     } catch (error) {
-      console.error('Error saving course:', error)
-      // Handle error, e.g., set a general error message
+      console.error('Error preparing course data:', error)
+      throw error
     } finally {
       this.isSubmitting = false
     }
@@ -97,7 +125,7 @@ export default class CourseModalPresenter {
       name: '',
       code: '',
       credits: 0,
-      instructor: '',
+      instructorId: '',
       description: ''
     }
   }

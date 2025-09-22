@@ -50,15 +50,24 @@
             </div>
             <div class="mb-3">
               <label class="form-label">Instructor</label>
-              <input 
-                v-model="state.form.instructor" 
-                class="form-control" 
-                :class="{ 'is-invalid': state.errors.instructor }"
-                @input="presenter.updateForm('instructor', $event.target.value)"
+              <select 
+                v-model="state.form.instructorId" 
+                class="form-select" 
+                :class="{ 'is-invalid': state.errors.instructorId }"
+                @change="presenter.updateForm('instructorId', $event.target.value)"
                 required 
-              />
-              <div v-if="state.errors.instructor" class="invalid-feedback">
-                {{ state.errors.instructor }}
+              >
+                <option value="">Select an instructor...</option>
+                <option 
+                  v-for="option in instructorOptions" 
+                  :key="option.value" 
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+              <div v-if="state.errors.instructorId" class="invalid-feedback">
+                {{ state.errors.instructorId }}
               </div>
             </div>
             <div class="mb-3">
@@ -85,7 +94,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import bootstrap from 'bootstrap/dist/js/bootstrap.bundle'
 import { usePresenterState } from '../../../utils/mobxVueBridge'
 import container from '../../../di/container'
@@ -101,6 +110,11 @@ const state = usePresenterState(presenter)
 
 const modalRef = ref()
 let modal = null
+
+// Get instructor options from presenter (following Clean Architecture)
+const instructorOptions = computed(() => {
+  return state.instructorOptions || []
+})
 
 const showModal = async () => {
   await nextTick()
@@ -129,8 +143,11 @@ const hideModal = () => {
 }
 
 const handleSave = async () => {
-  await presenter.save(props.onSave || (() => {}))
-  hideModal()
+  const courseData = await presenter.save()
+  if (courseData) {
+    emit('save', courseData)
+    hideModal()
+  }
 }
 
 const handleClose = () => {
@@ -139,9 +156,9 @@ const handleClose = () => {
 }
 
 // Watch for course prop changes to open modal
-watch(() => props.course, (newCourse) => {
+watch(() => props.course, async (newCourse) => {
   if (newCourse !== undefined) {
-    presenter.open(newCourse)
+    await presenter.open(newCourse)
     showModal()
   }
 }, { immediate: true })

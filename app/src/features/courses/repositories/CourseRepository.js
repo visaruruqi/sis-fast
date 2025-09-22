@@ -38,22 +38,21 @@ export default class CourseRepository extends BaseRepository {
   async save(course) {
     Guard.Against.NullOrWhiteSpace(course.name, 'name')
     Guard.Against.NullOrWhiteSpace(course.code, 'code')
-    Guard.Against.NullOrWhiteSpace(course.instructor, 'instructor')
+    Guard.Against.NullOrWhiteSpace(course.instructorId, 'instructorId')
     Guard.Against.NullOrUndefined(course.credits, 'credits')
 
     return this.executeWithLoading(async () => {
       if (course.id) {
         // Update existing course
+        const updatedCourse = await this.gateway.updateCourse(course)
         const idx = this.courses.findIndex(c => c.id === course.id)
         if (idx !== -1) {
-          this.courses[idx] = course
-          // In real app, would call gateway.updateCourse(course)
+          this.courses[idx] = updatedCourse
         }
       } else {
         // Create new course
-        course.id = 'crs' + Math.random().toString().slice(2, 8)
-        this.courses.push(course)
-        // In real app, would call gateway.createCourse(course)
+        const newCourse = await this.gateway.createCourse(course)
+        this.courses.push(newCourse)
       }
     })
   }
@@ -61,8 +60,8 @@ export default class CourseRepository extends BaseRepository {
   // Delete course
   async delete(id) {
     return this.executeWithLoading(async () => {
+      await this.gateway.deleteCourse(id)
       this.courses = this.courses.filter(c => c.id !== id)
-      // In real app, would call gateway.deleteCourse(id)
     })
   }
 
@@ -73,8 +72,25 @@ export default class CourseRepository extends BaseRepository {
     const lowerQuery = query.toLowerCase()
     return this.courses.filter(course => 
       course.name.toLowerCase().includes(lowerQuery) ||
-      course.code.toLowerCase().includes(lowerQuery) ||
-      course.instructor.toLowerCase().includes(lowerQuery)
+      course.code.toLowerCase().includes(lowerQuery)
+      // Note: We can't search by instructor name here since we only have instructorId
+      // In a real app, you might want to join with instructor data for search
     )
+  }
+
+  // Get course with instructor name (for display purposes)
+  getCourseWithInstructorName(course, instructorRepository) {
+    if (!course || !instructorRepository) return course
+    
+    const instructor = instructorRepository.getInstructorById(course.instructorId)
+    return {
+      ...course,
+      instructorName: instructor ? instructorRepository.getInstructorDisplayName(instructor) : 'Unknown Instructor'
+    }
+  }
+
+  // Get all courses with instructor names
+  getAllCoursesWithInstructorNames(instructorRepository) {
+    return this.courses.map(course => this.getCourseWithInstructorName(course, instructorRepository))
   }
 }

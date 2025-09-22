@@ -20,7 +20,7 @@
             <td><router-link :to="`/courses/${c.id}`">{{ c.name }}</router-link></td>
             <td>{{ c.code }}</td>
             <td>{{ c.credits }}</td>
-            <td>{{ c.instructor }}</td>
+            <td>{{ presenter.getInstructorName(c.instructorId) }}</td>
             <td>
             <button class="btn btn-sm btn-secondary me-2" @click="handleEditCourse(c)">Edit</button>
             <button class="btn btn-sm btn-danger" @click="presenter.delete(c)">Delete</button>
@@ -38,7 +38,7 @@
           </li>
         </ul>
       </nav>
-      <CourseModal v-if="state.modalOpen" :course="state.selected" @save="presenter.save" @close="presenter.closeModal" />
+      <CourseModal v-if="state.modalOpen" :course="state.selected" @save="handleSaveCourse" @close="presenter.closeModal" />
   </Layout>
 </template>
 
@@ -58,5 +58,9 @@ function handleAddCourse() {
 
 function handleEditCourse(course) {
   presenter.openModal(course)
+}
+
+function handleSaveCourse(courseData) {
+  presenter.save(courseData)
 }
 </script>

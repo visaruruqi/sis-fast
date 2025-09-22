@@ -51,16 +51,15 @@ export default class StudentRepository extends BaseRepository {
     return this.executeWithLoading(async () => {
       if (student.id) {
         // Update existing student
+        const updatedStudent = await this.gateway.updateStudent(student)
         const idx = this.students.findIndex(s => s.id === student.id)
         if (idx !== -1) {
-          this.students[idx] = student
-          // In real app, would call gateway.updateStudent(student)
+          this.students[idx] = updatedStudent
         }
       } else {
         // Create new student
-        student.id = 'stu' + Math.random().toString().slice(2,8)
-        this.students.push(student)
-        // In real app, would call gateway.createStudent(student)
+        const newStudent = await this.gateway.createStudent(student)
+        this.students.push(newStudent)
       }
     })
   }
@@ -68,10 +67,10 @@ export default class StudentRepository extends BaseRepository {
   // Archive student
   async archive(id) {
     return this.executeWithLoading(async () => {
+      await this.gateway.archiveStudent(id)
       const student = this.students.find(s => s.id === id)
       if (student) {
         student.status = STATUS.ARCHIVED
-        // In real app, would call gateway.archiveStudent(id)
       }
     })
   }

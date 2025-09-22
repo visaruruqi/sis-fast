@@ -1,15 +1,14 @@
 export default class CourseGateway {
-  async fetchCourses() {
-    // Simulate API call with initial data
-    // In real app, this would be: return fetch('/api/courses').then(r => r.json())
-    return [
+  constructor() {
+    // Maintain state in the gateway to persist data across navigation
+    this.courses = [
       {
         id: 'crs001',
         name: 'Introduction to Programming',
         code: 'CS101',
         description: 'Learn programming basics.',
         credits: 4,
-        instructor: 'Prof. Ilir D'
+        instructorId: 'inst001'
       },
       {
         id: 'crs002',
@@ -17,7 +16,7 @@ export default class CourseGateway {
         code: 'CS102',
         description: 'Introduction to data structures.',
         credits: 4,
-        instructor: 'Prof. Vesa T'
+        instructorId: 'inst002'
       },
       {
         id: 'crs003',
@@ -25,7 +24,7 @@ export default class CourseGateway {
         code: 'CS201',
         description: 'Algorithm design and analysis.',
         credits: 4,
-        instructor: 'Prof. Ardit B'
+        instructorId: 'inst001'
       },
       {
         id: 'crs004',
@@ -33,7 +32,7 @@ export default class CourseGateway {
         code: 'CS202',
         description: 'Relational database design.',
         credits: 3,
-        instructor: 'Prof. Leutrim H'
+        instructorId: 'inst003'
       },
       {
         id: 'crs005',
@@ -41,7 +40,7 @@ export default class CourseGateway {
         code: 'CS203',
         description: 'Processes, threads and memory management.',
         credits: 4,
-        instructor: 'Prof. Lura K'
+        instructorId: 'inst004'
       },
       {
         id: 'crs006',
@@ -49,7 +48,7 @@ export default class CourseGateway {
         code: 'CS204',
         description: 'Network architectures and protocols.',
         credits: 3,
-        instructor: 'Prof. Arber M'
+        instructorId: 'inst001'
       },
       {
         id: 'crs007',
@@ -57,7 +56,7 @@ export default class CourseGateway {
         code: 'CS205',
         description: 'Software development methodologies.',
         credits: 3,
-        instructor: 'Prof. Nora B'
+        instructorId: 'inst002'
       },
       {
         id: 'crs008',
@@ -65,7 +64,7 @@ export default class CourseGateway {
         code: 'CS206',
         description: 'Building modern web applications.',
         credits: 3,
-        instructor: 'Prof. Blerim R'
+        instructorId: 'inst003'
       },
       {
         id: 'crs009',
@@ -73,7 +72,7 @@ export default class CourseGateway {
         code: 'CS207',
         description: 'Creating apps for mobile devices.',
         credits: 3,
-        instructor: 'Prof. Luljeta P'
+        instructorId: 'inst004'
       },
       {
         id: 'crs010',
@@ -81,7 +80,7 @@ export default class CourseGateway {
         code: 'CS301',
         description: 'Introduction to AI concepts.',
         credits: 4,
-        instructor: 'Prof. Ardit B'
+        instructorId: 'inst001'
       },
       {
         id: 'crs011',
@@ -89,7 +88,7 @@ export default class CourseGateway {
         code: 'CS302',
         description: 'Supervised and unsupervised learning.',
         credits: 4,
-        instructor: 'Prof. Vesa T'
+        instructorId: 'inst002'
       },
       {
         id: 'crs012',
@@ -97,7 +96,7 @@ export default class CourseGateway {
         code: 'CS303',
         description: 'Rendering and graphics programming.',
         credits: 3,
-        instructor: 'Prof. Ilir D'
+        instructorId: 'inst001'
       },
       {
         id: 'crs013',
@@ -105,7 +104,7 @@ export default class CourseGateway {
         code: 'CS304',
         description: 'Principles of computer security.',
         credits: 3,
-        instructor: 'Prof. Leutrim H'
+        instructorId: 'inst003'
       },
       {
         id: 'crs014',
@@ -113,23 +112,35 @@ export default class CourseGateway {
         code: 'CS305',
         description: 'Cloud service models and architectures.',
         credits: 3,
-        instructor: 'Prof. Arber M'
+        instructorId: 'inst001'
       }
     ]
   }
 
-  async createCourse(course) {
-    // Simulate API call
-    return { ...course, id: 'crs' + Math.random().toString().slice(2,8) }
+  async fetchCourses() {
+    // Return the current state instead of hardcoded data
+    return [...this.courses]
   }
 
-  async updateCourse(course) {
-    // Simulate API call
-    return course
+  async createCourse(courseData) {
+    // Add new course to the gateway's state
+    const newCourse = { ...courseData, id: 'crs' + Math.random().toString().slice(2,8) }
+    this.courses.push(newCourse)
+    return newCourse
+  }
+
+  async updateCourse(courseData) {
+    // Update course in the gateway's state
+    const index = this.courses.findIndex(c => c.id === courseData.id)
+    if (index !== -1) {
+      this.courses[index] = courseData
+    }
+    return courseData
   }
 
   async deleteCourse(id) {
-    // Simulate API call
+    // Remove course from the gateway's state
+    this.courses = this.courses.filter(c => c.id !== id)
     return { success: true }
   }
 }

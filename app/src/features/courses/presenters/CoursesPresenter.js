@@ -9,8 +9,10 @@ export default class CoursesPresenter extends BasePresenter {
   page = 1
   pageSize = PAGINATION.DEFAULT_PAGE_SIZE
 
-  constructor(repository) {
+  constructor(repository, instructorRepository) {
     super(repository)
+    this.instructorRepository = instructorRepository
+    this.loadInstructorData()
     makeObservable(this, {
       search: observable,
       selected: observable,
@@ -102,6 +104,22 @@ export default class CoursesPresenter extends BasePresenter {
   // Override base class refresh method with specific implementation
   async refresh() {
     await this.repository.loadCourses()
+  }
+
+  // Load instructor data for display purposes
+  async loadInstructorData() {
+    try {
+      await this.instructorRepository.loadInstructors()
+    } catch (error) {
+      console.error('Failed to load instructor data:', error)
+    }
+  }
+
+  // Get instructor name for display purposes
+  getInstructorName(instructorId) {
+    if (!instructorId) return 'No Instructor'
+    const instructor = this.instructorRepository.getInstructorById(instructorId)
+    return instructor ? this.instructorRepository.getInstructorDisplayName(instructor) : 'Unknown Instructor'
   }
 
 }

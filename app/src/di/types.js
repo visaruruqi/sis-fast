@@ -11,5 +11,9 @@ export const TYPES = {
   CourseDetailsPresenter: Symbol('CourseDetailsPresenter'),
   EnrollmentGateway: Symbol('EnrollmentGateway'),
   EnrollmentRepository: Symbol('EnrollmentRepository'),
-  EnrollmentModalPresenter: Symbol('EnrollmentModalPresenter')
+  EnrollmentModalPresenter: Symbol('EnrollmentModalPresenter'),
+  InstructorGateway: Symbol('InstructorGateway'),
+  InstructorRepository: Symbol('InstructorRepository'),
+  InstructorsPresenter: Symbol('InstructorsPresenter'),
+  InstructorModalPresenter: Symbol('InstructorModalPresenter')
 }

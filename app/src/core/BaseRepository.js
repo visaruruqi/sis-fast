@@ -54,3 +54,4 @@ export class BaseRepository {
     this.error = message
   }
 }
+

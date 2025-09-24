@@ -2,9 +2,9 @@
   <Layout>
       <div class="d-flex justify-content-between mb-3">
         <h3>Courses</h3>
-        <button class="btn btn-primary" @click="handleAddCourse">Add Course</button>
+        <button class="btn btn-primary" @click="presenter.openModal">Add Course</button>
       </div>
-      <input v-model="state.search" class="form-control mb-3" placeholder="Search" @input="presenter.search = state.search" />
+      <input v-model="state.search" class="form-control mb-3" placeholder="Search" @input="presenter.setSearch(state.search)" />
       <table class="table table-striped">
         <thead>
           <tr>
@@ -22,7 +22,7 @@
             <td>{{ c.credits }}</td>
             <td>{{ presenter.getInstructorName(c.instructorId) }}</td>
             <td>
-            <button class="btn btn-sm btn-secondary me-2" @click="handleEditCourse(c)">Edit</button>
+            <button class="btn btn-sm btn-secondary me-2" @click="presenter.openModal(c)">Edit</button>
             <button class="btn btn-sm btn-danger" @click="presenter.delete(c)">Delete</button>
             </td>
           </tr>
@@ -38,11 +38,12 @@
           </li>
         </ul>
       </nav>
-      <CourseModal v-if="state.modalOpen" :course="state.selected" @save="handleSaveCourse" @close="presenter.closeModal" />
+      <CourseModal v-if="state.modalOpen" :course="state.selected" @save="presenter.save" @close="presenter.closeModal" />
   </Layout>
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import Layout from '../components/Layout.vue'
 import CourseModal from '../features/courses/components/CourseModal.vue'
 import { usePresenterState } from '../utils/mobxVueBridge'
@@ -52,15 +53,8 @@ import { TYPES } from '../di/types'
 const presenter = container.get(TYPES.CoursesPresenter)
 const state = usePresenterState(presenter) // Auto-detects all observable properties!
 
-function handleAddCourse() {
-  presenter.openModal()
-}
-
-function handleEditCourse(course) {
-  presenter.openModal(course)
-}
-
-function handleSaveCourse(courseData) {
-  presenter.save(courseData)
-}
+// Load courses when component mounts
+onMounted(async () => {
+  await presenter.refresh()
+})
 </script>

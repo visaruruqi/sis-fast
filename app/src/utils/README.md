@@ -38,7 +38,7 @@ const state = usePresenterState(presenter, ['modalOpen', 'selected', 'search'])
 const state = usePresenterState(presenter, {
   properties: ['modalOpen', 'search'],
   debounce: 100,        // Debounce updates by 100ms
-  deep: true,           // Deep copy objects using toJS()
+  // Deep copying is always enabled for consistency
   syncComputed: true    // Auto-sync computed properties
 })
 ```
@@ -330,7 +330,7 @@ state.resetData()                   // ✅ Action
 | `autoDetect` | boolean | `true` | Auto-detect observable properties |
 | `syncComputed` | boolean | `true` | Re-sync computed properties when triggers change |
 | `debounce` | number | `0` | Debounce updates in milliseconds |
-| `deep` | boolean | `false` | Use `toJS()` for deep copying objects |
+| `loopDetection` | boolean | `true` | Enable loop detection to prevent infinite loops |
 
 ## 🎨 Real-World Examples
 
@@ -368,7 +368,7 @@ const state = usePresenterState(presenter, 'all')
 const state = usePresenterState(presenter, {
   properties: ['search', 'results'],
   debounce: 200,    // Debounce rapid search updates
-  deep: true        // Deep copy large result objects
+  // Deep copying is always enabled for consistency
 })
 ```
 
@@ -414,7 +414,7 @@ The bridge includes comprehensive error handling:
 #### 🔧 Configuration Changes
 - **Default Behavior**: `allowDirectMutation = true` by default for backward compatibility
 - **Mode System**: `mode = 'two-way'` by default for convenience
-- **Deep Option**: `deep = false` by default to maintain MobX reactivity
+- **Deep Conversion**: Always uses `toJS()` for consistent deep conversion of MobX observables
 
 #### 🛡️ Safety Improvements
 - **Direct Mutation Control**: Can now block dangerous direct mutations
@@ -502,7 +502,7 @@ const state = usePresenterState(presenter)
 1. **Use auto-detection by default** - `usePresenterState(presenter)` handles everything
 2. **Specify properties only when needed** - for performance optimization
 3. **Enable debouncing for high-frequency updates** - search inputs, etc.
-4. **Use deep copying for complex objects** - when you need toJS() behavior
+4. **Deep copying is always enabled** - MobX observables are automatically converted to plain JS objects
 5. **Start simple, optimize later** - auto-detection is fast enough for most cases
 
 This universal bridge gives you the flexibility to use MobX with Vue in the most convenient way for your specific use case!

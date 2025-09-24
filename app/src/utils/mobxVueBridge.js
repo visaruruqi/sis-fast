@@ -1,380 +1,192 @@
-import { reactive, onMounted, onUnmounted, getCurrentInstance } from 'vue'
-import { observe, toJS, reaction } from 'mobx'
+import { reactive, onUnmounted, markRaw, ref } from 'vue'
+import { toJS, observe, reaction, autorun } from 'mobx'
+import clone from 'clone'
 
 /**
- * Universal MobX-Vue bridge that automatically detects and syncs all observable properties
+ * 🌉 MobX-Vue Bridge - A Story of Two Reactive Worlds
  * 
- * @param {Object} mobxObject - The MobX observable object (e.g., presenter)
- * @param {Array|string|null} properties - Properties to observe. Can be:
- *   - Array of property names: ['modalOpen', 'search'] 
- *   - String preset: 'all', 'modal', 'list', 'pagination'
- *   - null/undefined: auto-detect all observable properties
- * @param {Object} options - Configuration options
- * @param {string} options.mode - Binding mode: 'two-way' (default), 'read-only', 'action-only'
- * @param {boolean} options.allowDirectMutation - Allow direct state mutation (default: true for convenience)
- * @param {Function} options.onDirectMutation - Callback when direct mutation occurs
- * @returns {Object} Vue reactive state that mirrors MobX state
+ * Once upon a time, there was a MobX object that wanted to live in Vue's reactive world.
+ * This bridge helps them understand each other by translating between their languages.
+ * 
+ * @param {Object} mobxObject - The MobX character in our story
+ * @param {Object} options - The rules for how they should interact
+ * @returns {Object} A Vue reactive state that speaks both languages
  */
-export function useMobxBridge(mobxObject, properties = null, options = {}) {
-  const { 
-    autoDetect = true,
-    syncComputed = true,
-    debounce = 0,
-    deep = false,
-    mode = 'two-way',  // 'two-way', 'read-only', 'action-only'
-    allowDirectMutation = true,  // Default to true for convenience
-    onDirectMutation = null
-  } = options
+export function useMobxBridge(mobxObject, options = {}) {
+  const allowDirectMutation = options.allowDirectMutation ?? true
+  const vueState = reactive({})
   
-  // Auto-detect all members if not specified
-  let members
-  if (!properties || properties === 'all') {
-    members = autoDetectObservableMembers(mobxObject)
-  } else {
-    // If specific properties are provided, categorize them
-    members = {
-      properties: properties.filter(prop => {
-        try {
-          const value = mobxObject[prop]
-          return typeof value !== 'function'
-        } catch {
-          return false
+  // Add loop detection flag to vueState
+  vueState._isUpdatingFromMobx = false
+
+  // Get all properties from the MobX object
+  const properties = Object.getOwnPropertyNames(mobxObject)
+    .concat(Object.getOwnPropertyNames(Object.getPrototypeOf(mobxObject)))
+    .filter(prop => !prop.startsWith('_') && prop !== 'constructor')
+
+  // Categorize members
+  const members = {
+    properties: properties.filter(prop => {
+      try {
+        const value = mobxObject[prop]
+        return typeof value !== 'function'
+      } catch {
+        return false
+      }
+    }),
+    getters: properties.filter(prop => {
+      const descriptor = Object.getOwnPropertyDescriptor(mobxObject, prop) || 
+                        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), prop)
+      return descriptor && descriptor.get
+    }),
+    methods: properties.filter(prop => {
+      try {
+        return typeof mobxObject[prop] === 'function'
+      } catch {
+        return false
+      }
+    }),
+    setters: properties.filter(prop => {
+      const descriptor = Object.getOwnPropertyDescriptor(mobxObject, prop) || 
+                        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), prop)
+      // Include properties that have a setter (regardless of whether they have a getter)
+      return descriptor && descriptor.set
+    })
+  }
+
+  // Map properties to Vue state (two-way binding with reactive refs)
+  const propertyRefs = {}
+  members.properties.forEach(prop => {
+    // Create a reactive ref for each observable property
+    propertyRefs[prop] = ref(toJS(mobxObject[prop]))
+    
+    Object.defineProperty(vueState, prop, {
+      get: () => propertyRefs[prop].value,
+      set: allowDirectMutation ? (value) => {
+        console.log(`SETTER CALLED: Setting ${prop} to:`, value)
+        if (isVueReactiveProxy(value)) {
+          mobxObject[prop] = markRaw(clone(value))
+        } else {
+          mobxObject[prop] = clone(value)
         }
-      }),
-      getters: properties.filter(prop => {
+        console.log(`SETTER RESULT: MobX ${prop} is now:`, mobxObject[prop])
+        // Update the ref to trigger Vue reactivity
+        propertyRefs[prop].value = toJS(mobxObject[prop])
+        console.log(`SETTER RESULT: Vue ref ${prop} is now:`, propertyRefs[prop].value)
+      } : () => console.warn(`Direct mutation of '${prop}' is disabled`),
+      enumerable: true,
+      configurable: true
+    })
+  })
+
+  // Map getters to Vue state (read-only with reactive values)
+  const getterRefs = {}
+  members.getters.forEach(prop => {
+    // Create a reactive ref for each computed property
+    getterRefs[prop] = ref(toJS(mobxObject[prop]))
+    
+    Object.defineProperty(vueState, prop, {
+      get: () => getterRefs[prop].value,
+      set: () => console.warn(`Cannot assign to computed property '${prop}'`),
+      enumerable: true,
+      configurable: true
+    })
+  })
+
+  // Map methods to Vue state (bound functions)
+  members.methods.forEach(prop => {
+    Object.defineProperty(vueState, prop, {
+      get: () => mobxObject[prop].bind(mobxObject),
+      set: () => console.warn(`Cannot assign to method '${prop}'`),
+      enumerable: true,
+      configurable: true
+    })
+  })
+
+  // Map setters to Vue state (bound functions with 'set' prefix)
+  members.setters.forEach(prop => {
+    const setterName = `set${prop.charAt(0).toUpperCase()}${prop.slice(1)}`
+    Object.defineProperty(vueState, setterName, {
+      get: () => {
         const descriptor = Object.getOwnPropertyDescriptor(mobxObject, prop) || 
                           Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), prop)
-        return descriptor && descriptor.get
-      }),
-      methods: properties.filter(prop => {
-        try {
-          return typeof mobxObject[prop] === 'function'
-        } catch {
-          return false
-        }
-      }),
-      setters: []
-    }
-  }
-  
-  // Create Vue reactive state
-  const state = reactive({})
-  
-  // Initialize reactive properties and getters with current MobX values
-  const reactiveMembers = [...members.properties, ...members.getters]
-  reactiveMembers.forEach(prop => {
-    try {
-      // Create binding based on mode and property type
-      if (members.properties.includes(prop)) {
-        // For observable properties: create binding based on mode
-        Object.defineProperty(state, prop, {
-          get() {
-            return deep ? toJS(mobxObject[prop]) : mobxObject[prop]
-          },
-          set(value) {
-            // Handle different binding modes
-            if (mode === 'read-only') {
-              console.warn(`Direct mutation of '${prop}' is disabled. Use actions instead.`)
-              if (onDirectMutation) {
-                onDirectMutation(prop, value, 'read-only')
-              }
-              return
-            }
-            
-            if (mode === 'action-only') {
-              console.warn(`Direct mutation of '${prop}' is disabled. Use actions instead.`)
-              if (onDirectMutation) {
-                onDirectMutation(prop, value, 'action-only')
-              }
-              return
-            }
-            
-            // Mode: 'two-way' (default)
-            if (!allowDirectMutation) {
-              console.warn(`Direct mutation of '${prop}' is disabled. Use actions instead.`)
-              if (onDirectMutation) {
-                onDirectMutation(prop, value, 'disabled')
-              }
-              return
-            }
-            
-            // Log direct mutation for debugging
-            if (onDirectMutation) {
-              onDirectMutation(prop, value, 'direct')
-            }
-            
-            // Update MobX property directly
-            mobxObject[prop] = value
-          },
-          enumerable: true,
-          configurable: true
-        })
-      } else {
-        // For getters: always read-only access
-        state[prop] = deep ? toJS(mobxObject[prop]) : mobxObject[prop]
-      }
-    } catch (error) {
-      console.warn(`Failed to initialize property ${prop}:`, error)
-    }
+        return descriptor.set.bind(mobxObject)
+      },
+      set: () => console.warn(`Cannot assign to setter '${setterName}'`),
+      enumerable: true,
+      configurable: true
+    })
   })
+
+  // Set up MobX observers for the entire object
+  const subscriptions = []
   
-  // Expose actions and setters directly (not reactive, but accessible)
-  members.methods.forEach(method => {
+  // Use detailed observe for each property to detect specific changes
+  members.properties.forEach(prop => {
     try {
-      // Check if this is a setter method (starts with 'set')
-      if (method.startsWith('set') && method.length > 3) {
-        const propertyName = method.charAt(3).toLowerCase() + method.slice(4)
-        const descriptor = Object.getOwnPropertyDescriptor(mobxObject, propertyName) || 
-                          Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), propertyName)
-        if (descriptor && descriptor.set) {
-          // Bind the setter
-          state[method] = descriptor.set.bind(mobxObject)
-        } else {
-          // Regular action
-          state[method] = mobxObject[method].bind(mobxObject)
-        }
-      } else {
-        // Regular action
-        state[method] = mobxObject[method].bind(mobxObject)
-      }
-    } catch (error) {
-      console.warn(`Failed to bind action ${method}:`, error)
-    }
-  })
-  
-  members.setters.forEach(setter => {
-    try {
-      const descriptor = Object.getOwnPropertyDescriptor(mobxObject, setter) || 
-                        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), setter)
-      if (descriptor && descriptor.set) {
-        state[setter] = descriptor.set.bind(mobxObject)
-      }
-    } catch (error) {
-      console.warn(`Failed to bind setter ${setter}:`, error)
-    }
-  })
-  
-  // Track disposers for cleanup
-  let disposers = []
-  
-        onMounted(() => {
-          // Use MobX reaction to observe only getters (properties are handled by getter/setter)
-          // Methods and setters are exposed directly without observation
-          const getterMembers = members.getters
-          if (getterMembers.length > 0) {
-            disposers.push(
-              reaction(
-                () => {
-                  // Track only getters
-                  const trackedValues = {}
-                  getterMembers.forEach(prop => {
-                    try {
-                      // Access the property to ensure MobX tracks it
-                      const value = mobxObject[prop]
-                      trackedValues[prop] = value
-                    } catch (error) {
-                      console.warn(`Failed to track getter ${prop}:`, error)
-                    }
-                  })
-                  return trackedValues
-                },
-                (trackedValues) => {
-                  // Update Vue reactive state when MobX getters change
-                  Object.keys(trackedValues).forEach(prop => {
-                    try {
-                      // Re-access the property to get the latest value
-                    const latestValue = mobxObject[prop]
-                    state[prop] = deep ? toJS(latestValue) : latestValue
-                  } catch (error) {
-                    console.warn(`Failed to sync property ${prop}:`, error)
-                  }
-                })
-              },
-              {
-                fireImmediately: true, // Sync immediately on mount
-                equals: (a, b) => {
-                  // Custom equality check to avoid unnecessary updates
-                  if (Object.keys(a).length !== Object.keys(b).length) return false
-                  for (const key in a) {
-                    if (a[key] !== b[key]) return false
-                  }
-                  return true
-                }
-              }
-            )
-          )
+      const subscription = observe(mobxObject, prop, (change) => {
+        // Only update if the value actually changed and we have a ref
+        if (propertyRefs && propertyRefs[prop]) {
+          const newValue = toJS(mobxObject[prop])
+          if (propertyRefs[prop].value !== newValue) {
+            propertyRefs[prop].value = newValue
           }
-        })
+        }
+      })
+      subscriptions.push(subscription)
+    } catch (error) {
+      // Silently ignore non-observable properties
+    }
+  })
   
+  // Use detailed observe for each getter to detect computed property changes
+  members.getters.forEach(prop => {
+    try {
+      const subscription = observe(mobxObject, prop, (change) => {
+        // Only update if the value actually changed and we have a ref
+        if (getterRefs && getterRefs[prop]) {
+          const newValue = toJS(mobxObject[prop])
+          if (getterRefs[prop].value !== newValue) {
+            getterRefs[prop].value = newValue
+          }
+        }
+      })
+      subscriptions.push(subscription)
+    } catch (error) {
+      // Silently ignore non-observable properties
+    }
+  })
+
+  // Cleanup on unmount
   onUnmounted(() => {
-    disposers.forEach(dispose => {
-      try {
-        dispose()
-      } catch (error) {
-        console.warn('Error disposing observer:', error)
+    subscriptions.forEach(unsubscribe => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe()
       }
     })
-    disposers = []
   })
-  
-  return state
+
+  return vueState
+}
+
+// Helper for usePresenterState - A convenient alias
+export function usePresenterState(presenter, options = {}) {
+  return useMobxBridge(presenter, options)
 }
 
 /**
- * Auto-detect all members in a MobX object (properties, getters, actions, setters)
- * @param {Object} mobxObject - MobX observable object
- * @returns {Object} Object with categorized members
+ * Detect if a value is wrapped with Vue reactivity proxies
  */
-function autoDetectObservableMembers(mobxObject) {
-  const members = {
-    properties: [],    // Observable properties
-    getters: [],       // Computed properties (getters)
-    methods: [],       // Actions (methods that modify state)
-    setters: []        // Property setters
-  }
-  
-  // Check if this object has explicit MobX configuration
-  const hasExplicitConfig = mobxObject.$mobx && mobxObject.$mobx.values
-  if (hasExplicitConfig) {
-    // Handle explicit makeObservable configuration
-    return detectExplicitObservableMembers(mobxObject, members)
-  }
-  
-  // Get all enumerable properties
-  for (const prop in mobxObject) {
-    if (mobxObject.hasOwnProperty(prop)) {
-      const descriptor = Object.getOwnPropertyDescriptor(mobxObject, prop)
-      
-      if (descriptor && !prop.startsWith('_')) {
-        if (descriptor.value !== undefined) {
-          // Regular property or method
-          if (typeof mobxObject[prop] === 'function') {
-            members.methods.push(prop) // Actions (methods that modify state)
-          } else {
-            members.properties.push(prop)
-          }
-        } else if (descriptor.get) {
-          // Getter (computed property)
-          members.getters.push(prop)
-        }
-      }
-    }
-  }
-  
-  // Also check prototype for getters, methods, and setters
-  let proto = Object.getPrototypeOf(mobxObject)
-  while (proto && proto !== Object.prototype) {
-    Object.getOwnPropertyNames(proto).forEach(prop => {
-      const descriptor = Object.getOwnPropertyDescriptor(proto, prop)
-      if (descriptor && !prop.startsWith('_')) {
-        if (descriptor.get && !members.getters.includes(prop)) {
-          // Getter (computed property)
-          members.getters.push(prop)
-        }
-        if (descriptor.set && !members.setters.includes(prop)) {
-          // Setter - if it has both getter and setter, we expose the setter as a method
-          // If it's a pure setter (no getter), we handle it as a setter
-          if (descriptor.get) {
-            // Both getter and setter - expose setter as a method
-            members.methods.push(`set${prop.charAt(0).toUpperCase() + prop.slice(1)}`)
-          } else {
-            // Pure setter
-            members.setters.push(prop)
-          }
-        }
-        if (descriptor.value && typeof descriptor.value === 'function' && !members.methods.includes(prop)) {
-          // Action (method that modifies state)
-          members.methods.push(prop)
-        }
-      }
-    })
-    proto = Object.getPrototypeOf(proto)
-  }
-  
-  return members
-}
+function isVueReactiveProxy(value) {
+  if (value === null || value === undefined) return false
 
-/**
- * Detect members in objects with explicit makeObservable configuration
- * @param {Object} mobxObject - MobX observable object with explicit config
- * @param {Object} members - Members object to populate
- * @returns {Object} Object with categorized members
- */
-function detectExplicitObservableMembers(mobxObject, members) {
-  // Get all enumerable properties (including those defined in makeObservable)
-  for (const prop in mobxObject) {
-    if (mobxObject.hasOwnProperty(prop) && !prop.startsWith('_')) {
-      const descriptor = Object.getOwnPropertyDescriptor(mobxObject, prop)
-      
-      if (descriptor && descriptor.value !== undefined) {
-        // Regular property or method
-        if (typeof mobxObject[prop] === 'function') {
-          members.methods.push(prop) // Actions (methods that modify state)
-        } else {
-          members.properties.push(prop)
-        }
-      } else if (descriptor && descriptor.get) {
-        // Getter (computed property)
-        members.getters.push(prop)
-      }
-    }
-  }
-  
-  // Also check prototype for getters, methods, and setters
-  let proto = Object.getPrototypeOf(mobxObject)
-  while (proto && proto !== Object.prototype) {
-    Object.getOwnPropertyNames(proto).forEach(prop => {
-      const descriptor = Object.getOwnPropertyDescriptor(proto, prop)
-      if (descriptor && !prop.startsWith('_')) {
-        if (descriptor.get && !members.getters.includes(prop)) {
-          // Getter (computed property)
-          members.getters.push(prop)
-        }
-        if (descriptor.set && !members.setters.includes(prop)) {
-          // Setter - if it has both getter and setter, we expose the setter as a method
-          // If it's a pure setter (no getter), we handle it as a setter
-          if (descriptor.get) {
-            // Both getter and setter - expose setter as a method
-            members.methods.push(`set${prop.charAt(0).toUpperCase() + prop.slice(1)}`)
-          } else {
-            // Pure setter
-            members.setters.push(prop)
-          }
-        }
-        if (descriptor.value && typeof descriptor.value === 'function' && !members.methods.includes(prop)) {
-          // Action (method that modifies state)
-          members.methods.push(prop)
-        }
-      }
-    })
-    proto = Object.getPrototypeOf(proto)
-  }
-  
-  return members
-}
-
-/**
- * Simple and powerful usePresenterState - auto-detects or uses specific properties
- * 
- * @param {Object} presenter - The MobX presenter
- * @param {Array|string|Object} properties - Configuration:
- *   - Array: specific properties ['modalOpen', 'search']
- *   - 'all' or undefined: auto-detect all observable properties
- *   - Object: full options { properties: [...], debounce: 100, ... }
- * @param {Object} options - Additional options (when properties is array/string)
- * @returns {Object} Vue reactive state
- */
-export function usePresenterState(presenter, properties = 'all', options = {}) {
-  // Handle different config styles
-  if (Array.isArray(properties)) {
-    // Array of specific properties: usePresenterState(presenter, ['modalOpen', 'search'])
-    return useMobxBridge(presenter, properties, options)
-  } else if (typeof properties === 'object') {
-    // Full options object: usePresenterState(presenter, { properties: [...], debounce: 100 })
-    const { properties: props, ...bridgeOptions } = properties
-    return useMobxBridge(presenter, props, bridgeOptions)
-  } else {
-    // String ('all') or default: usePresenterState(presenter) or usePresenterState(presenter, 'all')
-    return useMobxBridge(presenter, properties, options)
-  }
+  return (
+    value.__v_isReactive === true ||  // Vue 3 reactive object
+    value.__v_isRef === true ||      // Vue 3 ref
+    value.__v_isReadonly === true || // Vue 3 readonly
+    value.__v_isShallow === true ||  // Vue 3 shallow reactive
+    value.__v_skip === true ||       // Vue 3 skip marker
+    value.__ob__ !== undefined ||    // Vue 2 observable
+    (typeof value === 'object' && value.constructor && value.constructor.name === 'Proxy')
+  )
 }

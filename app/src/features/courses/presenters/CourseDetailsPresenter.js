@@ -22,6 +22,7 @@ export default class CourseDetailsPresenter {
    */
   async initialize(courseId) {
     this.courseId = courseId
+    console.log('CourseDetailsPresenter: Setting isLoading to true')
     this.isLoading = true
     this.error = null
 
@@ -32,10 +33,16 @@ export default class CourseDetailsPresenter {
         this.enrollmentRepository.loadEnrollments(),
         this.studentRepository.loadStudents()
       ])
+      
+      // Debug: Check if course was found
+      console.log('CourseDetailsPresenter: After loading, courseId:', this.courseId)
+      console.log('CourseDetailsPresenter: Available courses:', this.courseRepository.courses.length)
+      console.log('CourseDetailsPresenter: Course found:', this.course)
     } catch (error) {
       this.error = error.message
       console.error('Failed to load course details:', error)
     } finally {
+      console.log('CourseDetailsPresenter: Setting isLoading to false')
       this.isLoading = false
     }
   }

@@ -18,7 +18,22 @@ describe('StudentDetailsPresenter', () => {
           email: 'john.doe@example.com',
           status: 'Active'
         }
-      ]
+      ],
+      isLoading: false,
+      error: null,
+      loadStudents: vi.fn().mockResolvedValue(),
+      executeWithLoading: vi.fn().mockImplementation(async (operation) => {
+        mockStudentRepository.isLoading = true
+        mockStudentRepository.error = null
+        try {
+          return await operation()
+        } catch (error) {
+          mockStudentRepository.error = error.message
+          throw error
+        } finally {
+          mockStudentRepository.isLoading = false
+        }
+      })
     }
 
     mockEnrollmentRepository = {
@@ -58,6 +73,7 @@ describe('StudentDetailsPresenter', () => {
       await presenter.initialize('stu001')
 
       expect(presenter.studentId).toBe('stu001')
+      expect(mockStudentRepository.loadStudents).toHaveBeenCalled()
       expect(mockEnrollmentRepository.loadEnrollments).toHaveBeenCalled()
       expect(mockCourseRepository.loadCourses).toHaveBeenCalled()
     })
@@ -176,6 +192,7 @@ describe('StudentDetailsPresenter', () => {
       
       await presenter.refresh()
       
+      expect(mockStudentRepository.loadStudents).toHaveBeenCalled()
       expect(mockEnrollmentRepository.loadEnrollments).toHaveBeenCalled()
       expect(mockCourseRepository.loadCourses).toHaveBeenCalled()
     })

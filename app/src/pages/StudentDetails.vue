@@ -1,6 +1,19 @@
 <template>
   <Layout>
-    <div v-if="state.student">
+    <div v-if="state.isLoading" class="text-center">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Loading...</span>
+      </div>
+      <p>Loading student details...</p>
+    </div>
+    
+    <div v-else-if="state.error" class="alert alert-danger">
+      <h4>Error loading student details</h4>
+      <p>{{ state.error }}</p>
+      <button class="btn btn-primary" @click="presenter.refresh()">Retry</button>
+    </div>
+    
+    <div v-else-if="state.student">
       <router-link to="/students" class="btn btn-link p-0 mb-2">Back</router-link>
       <h3>{{ state.student.firstName }} {{ state.student.lastName }}</h3>
       <p>Email: {{ state.student.email }}</p>
@@ -29,6 +42,12 @@
         :studentId="showEnroll" 
         @close="showEnroll = null" 
       />
+    </div>
+    
+    <div v-else class="alert alert-warning">
+      <h4>Student not found</h4>
+      <p>No student found with ID: {{ id }}</p>
+      <router-link to="/students" class="btn btn-primary">Back to Students</router-link>
     </div>
   </Layout>
 </template>

@@ -12,13 +12,18 @@ const mockOnUnmounted = (fn) => {
 // Mock Vue reactive
 const mockReactive = (obj) => obj
 
+// Mock Vue ref
+const mockRef = (value) => ({ value })
+
 // Mock the Vue imports
 vi.mock('vue', () => ({
   reactive: (obj) => obj,
+  ref: (value) => ({ value }),
   onMounted: (fn) => fn(),
   onUnmounted: (fn) => {
     mockDisposers.push(fn)
-  }
+  },
+  markRaw: (obj) => obj
 }))
 
 import { useMobxBridge } from '../mobxVueBridge.js'
@@ -70,14 +75,14 @@ describe('MobX-Vue Bridge with Computed Properties', () => {
   })
 
   it('should sync regular observable properties', () => {
-    const state = useMobxBridge(testPresenter, ['count', 'name'])
+    const state = useMobxBridge(testPresenter)
     
     expect(state.count).toBe(0)
     expect(state.name).toBe('Test')
   })
 
   it('should sync computed properties (getters)', () => {
-    const state = useMobxBridge(testPresenter, ['displayName', 'itemCount', 'summary'])
+    const state = useMobxBridge(testPresenter)
     
     expect(state.displayName).toBe('Test (0)')
     expect(state.itemCount).toBe(0)
@@ -85,7 +90,7 @@ describe('MobX-Vue Bridge with Computed Properties', () => {
   })
 
   it('should update computed properties when dependencies change', () => {
-    const state = useMobxBridge(testPresenter, ['count', 'displayName', 'summary'])
+    const state = useMobxBridge(testPresenter)
     
     // Initial state
     expect(state.displayName).toBe('Test (0)')
@@ -100,7 +105,7 @@ describe('MobX-Vue Bridge with Computed Properties', () => {
   })
 
   it('should update computed properties when multiple dependencies change', () => {
-    const state = useMobxBridge(testPresenter, ['name', 'items', 'itemCount', 'summary'])
+    const state = useMobxBridge(testPresenter)
     
     // Initial state
     expect(state.itemCount).toBe(0)
@@ -128,7 +133,7 @@ describe('MobX-Vue Bridge with Computed Properties', () => {
   })
 
   it('should handle complex computed property dependencies', () => {
-    const state = useMobxBridge(testPresenter, ['count', 'name', 'items', 'summary'])
+    const state = useMobxBridge(testPresenter)
     
     // Make multiple changes that affect the computed property
     testPresenter.increment()
@@ -141,7 +146,7 @@ describe('MobX-Vue Bridge with Computed Properties', () => {
   })
 
   it('should expose actions and allow calling them', () => {
-    const state = useMobxBridge(testPresenter, ['count', 'increment', 'addItem', 'setName'])
+    const state = useMobxBridge(testPresenter)
     
     // Actions should be available and callable
     expect(typeof state.increment).toBe('function')
@@ -212,7 +217,7 @@ describe('MobX-Vue Bridge with Computed Properties', () => {
   })
 
   it('should bind actions to maintain correct context', () => {
-    const state = useMobxBridge(testPresenter, ['count', 'increment'])
+    const state = useMobxBridge(testPresenter)
     
     // Call action through bridge
     state.increment()

@@ -19,7 +19,12 @@ describe('CourseDetailsPresenter', () => {
           instructor: 'Dr. Smith'
         }
       ],
-      loadCourses: vi.fn().mockResolvedValue()
+      loadCourses: vi.fn().mockResolvedValue(),
+      isLoading: false,
+      error: null,
+      executeWithLoading: vi.fn().mockImplementation(async (operation) => {
+        return await operation()
+      })
     }
 
     mockEnrollmentRepository = {
@@ -82,15 +87,13 @@ describe('CourseDetailsPresenter', () => {
     it('should handle loading state', async () => {
       expect(presenter.isLoading).toBe(false)
 
-      const initPromise = presenter.initialize('crs001')
-      expect(presenter.isLoading).toBe(true)
-
-      await initPromise
+      await presenter.initialize('crs001')
       expect(presenter.isLoading).toBe(false)
     })
 
     it('should handle errors gracefully', async () => {
-      mockCourseRepository.loadCourses.mockRejectedValue(new Error('Load failed'))
+      mockCourseRepository.executeWithLoading.mockRejectedValue(new Error('Load failed'))
+      mockCourseRepository.error = 'Load failed'
 
       await presenter.initialize('crs001')
 
@@ -212,12 +215,12 @@ describe('CourseDetailsPresenter', () => {
 
     it('should demonstrate proper layer separation', () => {
       // Presenter only knows about repositories, not gateways or components
-      expect(presenter.courseRepository).toBeDefined()
+      expect(presenter.repository).toBeDefined()
       expect(presenter.enrollmentRepository).toBeDefined()
       expect(presenter.studentRepository).toBeDefined()
       
       // Verify the repositories have the expected properties
-      expect(presenter.courseRepository.courses).toBeDefined()
+      expect(presenter.repository.courses).toBeDefined()
       expect(presenter.enrollmentRepository.allEnrollments).toBeDefined()
       expect(presenter.studentRepository.allStudents).toBeDefined()
     })

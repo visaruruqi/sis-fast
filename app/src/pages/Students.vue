@@ -2,9 +2,12 @@
   <Layout>
       <div class="d-flex justify-content-between mb-3">
         <h3>Students</h3>
-        <button class="btn btn-primary" @click="handleAddStudent">Add Student</button>
+        <button class="btn btn-primary" @click="presenter.openModal">Add Student</button>
       </div>
-      <input v-model="state.search" class="form-control mb-3" placeholder="Search" @input="presenter.search = state.search" />
+      <input v-model="state.search" class="form-control mb-3" placeholder="Search" @input="presenter.setSearch(state.search)" />
+      <div class="mb-3">
+        <strong>Debug:</strong> Students loaded: {{ state.filtered.length }} | Search: "{{ state.search }}"
+      </div>
       <table class="table table-striped">
         <thead>
           <tr>
@@ -38,6 +41,7 @@
 </template>
 
 <script setup>
+import { onMounted } from 'vue'
 import Layout from '../components/Layout.vue'
 import StudentModal from '../features/students/components/StudentModal.vue'
 import { usePresenterState } from '../utils/mobxVueBridge'
@@ -47,8 +51,8 @@ import { TYPES } from '../di/types'
 const presenter = container.get(TYPES.StudentsPresenter)
 const state = usePresenterState(presenter) // Auto-detects all observable properties!
 
-function handleAddStudent() {
-  presenter.openModal()
-}
-
+// Load students when component mounts
+onMounted(async () => {
+  await presenter.refresh()
+})
 </script>

@@ -33,16 +33,21 @@ export default class StudentDetailsPresenter extends BasePresenter {
    */
   async initialize(studentId) {
     this.studentId = studentId
-    // Presenters don't have their own loading state - they use repository loading states
+    
     try {
-      // Load enrollments and courses for this student
-      await Promise.all([
-        this.enrollmentRepository.loadEnrollments(),
-        this.courseRepository.loadCourses()
-      ])
+      // Use repository's loading mechanism
+      return await this.repository.executeWithLoading(async () => {
+        // Load students, enrollments and courses for this student
+        await Promise.all([
+          this.repository.loadStudents(),
+          this.enrollmentRepository.loadEnrollments(),
+          this.courseRepository.loadCourses()
+        ])
+      })
     } catch (error) {
+      // Error is already handled by executeWithLoading and set on repository.error
+      // We don't need to throw it again
       console.error('Failed to load student details:', error)
-      throw error
     }
   }
 
@@ -79,13 +84,10 @@ export default class StudentDetailsPresenter extends BasePresenter {
    * @param {Object} enrollmentData - Enrollment data
    */
   async enrollStudent(enrollmentData) {
-    try {
+    // Use repository's loading mechanism
+    return this.repository.executeWithLoading(async () => {
       await this.enrollmentRepository.createEnrollment(enrollmentData)
-    } catch (error) {
-      this.error = error.message
-      console.error('Failed to enroll student:', error)
-      throw error
-    }
+    })
   }
 
   /**

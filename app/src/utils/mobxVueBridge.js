@@ -1,5 +1,6 @@
-import { reactive, onUnmounted, markRaw, ref } from 'vue'
-import { toJS, observe, reaction, autorun } from 'mobx'
+import { reactive, onUnmounted, ref } from 'vue'
+import { toJS, observe, reaction } from 'mobx'
+import { deepObserve } from 'mobx-utils'
 import clone from 'clone'
 
 /**
@@ -15,9 +16,6 @@ import clone from 'clone'
 export function useMobxBridge(mobxObject, options = {}) {
   const allowDirectMutation = options.allowDirectMutation ?? true
   const vueState = reactive({})
-  
-  // Add loop detection flag to vueState
-  vueState._isUpdatingFromMobx = false
 
   // Get all properties from the MobX object
   const properties = Object.getOwnPropertyNames(mobxObject)
@@ -63,16 +61,9 @@ export function useMobxBridge(mobxObject, options = {}) {
     Object.defineProperty(vueState, prop, {
       get: () => propertyRefs[prop].value,
       set: allowDirectMutation ? (value) => {
-        console.log(`SETTER CALLED: Setting ${prop} to:`, value)
-        if (isVueReactiveProxy(value)) {
-          mobxObject[prop] = markRaw(clone(value))
-        } else {
-          mobxObject[prop] = clone(value)
-        }
-        console.log(`SETTER RESULT: MobX ${prop} is now:`, mobxObject[prop])
+        mobxObject[prop] = clone(value)
         // Update the ref to trigger Vue reactivity
         propertyRefs[prop].value = toJS(mobxObject[prop])
-        console.log(`SETTER RESULT: Vue ref ${prop} is now:`, propertyRefs[prop].value)
       } : () => console.warn(`Direct mutation of '${prop}' is disabled`),
       enumerable: true,
       configurable: true
@@ -125,7 +116,6 @@ export function useMobxBridge(mobxObject, options = {}) {
   members.properties.forEach(prop => {
     try {
       const subscription = observe(mobxObject, prop, (change) => {
-        // Only update if the value actually changed and we have a ref
         if (propertyRefs && propertyRefs[prop]) {
           const newValue = toJS(mobxObject[prop])
           if (propertyRefs[prop].value !== newValue) {
@@ -138,19 +128,53 @@ export function useMobxBridge(mobxObject, options = {}) {
       // Silently ignore non-observable properties
     }
   })
-  
-  // Use detailed observe for each getter to detect computed property changes
-  members.getters.forEach(prop => {
-    try {
-      const subscription = observe(mobxObject, prop, (change) => {
-        // Only update if the value actually changed and we have a ref
-        if (getterRefs && getterRefs[prop]) {
-          const newValue = toJS(mobxObject[prop])
-          if (getterRefs[prop].value !== newValue) {
-            getterRefs[prop].value = newValue
+
+  // Add deep observation for nested objects and arrays using deepObserve
+  try {
+    const subscription = deepObserve(mobxObject, (change, path) => {
+      // Check if this change affects any of our properties
+      members.properties.forEach(prop => {
+        if (path === prop || path.startsWith(prop + '.')) {
+          if (propertyRefs && propertyRefs[prop]) {
+            const newValue = toJS(mobxObject[prop])
+            if (propertyRefs[prop].value !== newValue) {
+              propertyRefs[prop].value = newValue
+            }
           }
         }
       })
+      
+      // Check if this change affects any of our computed properties
+      members.getters.forEach(prop => {
+        if (path === prop || path.startsWith(prop + '.')) {
+          if (getterRefs && getterRefs[prop]) {
+            const newValue = toJS(mobxObject[prop])
+            if (getterRefs[prop].value !== newValue) {
+              getterRefs[prop].value = newValue
+            }
+          }
+        }
+      })
+    })
+    subscriptions.push(subscription)
+  } catch (error) {
+    // Silently ignore if deepObserve fails
+  }
+
+  // Add reaction for computed properties to handle dependencies
+  members.getters.forEach(prop => {
+    try {
+      const subscription = reaction(
+        () => toJS(mobxObject[prop]),
+        (newValue) => {
+          if (getterRefs && getterRefs[prop]) {
+            if (getterRefs[prop].value !== newValue) {
+              getterRefs[prop].value = newValue
+            }
+          }
+        },
+        { fireImmediately: false }
+      )
       subscriptions.push(subscription)
     } catch (error) {
       // Silently ignore non-observable properties
@@ -172,21 +196,4 @@ export function useMobxBridge(mobxObject, options = {}) {
 // Helper for usePresenterState - A convenient alias
 export function usePresenterState(presenter, options = {}) {
   return useMobxBridge(presenter, options)
-}
-
-/**
- * Detect if a value is wrapped with Vue reactivity proxies
- */
-function isVueReactiveProxy(value) {
-  if (value === null || value === undefined) return false
-
-  return (
-    value.__v_isReactive === true ||  // Vue 3 reactive object
-    value.__v_isRef === true ||      // Vue 3 ref
-    value.__v_isReadonly === true || // Vue 3 readonly
-    value.__v_isShallow === true ||  // Vue 3 shallow reactive
-    value.__v_skip === true ||       // Vue 3 skip marker
-    value.__ob__ !== undefined ||    // Vue 2 observable
-    (typeof value === 'object' && value.constructor && value.constructor.name === 'Proxy')
-  )
 }

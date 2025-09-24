@@ -12,7 +12,15 @@ vi.mock('vue', () => ({
   })),
   ref: vi.fn((value) => ({ value })),
   onUnmounted: vi.fn(),
-  markRaw: vi.fn((value) => value)
+  markRaw: vi.fn((value) => value),
+  watch: vi.fn((source, callback, options) => {
+    // Store the callback for manual triggering
+    if (typeof source === 'object' && source.value !== undefined) {
+      // For refs, store the callback
+      source._watcher = callback
+    }
+    return () => {} // cleanup function
+  })
 }))
 
 import { useMobxBridge } from '../mobxVueBridge'

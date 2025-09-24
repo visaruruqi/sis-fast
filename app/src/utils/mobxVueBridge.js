@@ -16,7 +16,24 @@ export function useMobxBridge(mobxObject, options = {}) {
     .filter(p => p !== 'constructor' && !p.startsWith('_'));
 
   const members = {
-    getters: props.filter(p => isComputedProp(mobxObject, p)),
+    getters: props.filter(p => {
+      const isComputed = isComputedProp(mobxObject, p);
+      if (!isComputed) return false;
+      // For computed properties, we need to check if the setter actually works
+      // If the setter throws an error, it's a true computed property
+      try {
+        const descriptor = Object.getOwnPropertyDescriptor(mobxObject, p) || 
+                          Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), p);
+        if (descriptor && descriptor.set) {
+          // Try to call the setter - if it throws, it's a computed property
+          descriptor.set.call(mobxObject, 'test');
+          return false; // It's a getter/setter pair, not a computed
+        }
+        return true; // No setter, it's a computed property
+      } catch (error) {
+        return true; // Setter throws error, it's a computed property
+      }
+    }),
     properties: props.filter(
       p =>
         isObservableProp(mobxObject, p) &&
@@ -25,6 +42,7 @@ export function useMobxBridge(mobxObject, options = {}) {
     ),
     methods: props.filter(p => typeof mobxObject[p] === 'function'),
   };
+  
 
   // ---- utils: guards + equality --------------------------------------------
   const updatingFromMobx = new Set();
@@ -42,13 +60,33 @@ export function useMobxBridge(mobxObject, options = {}) {
     propertyRefs[prop] = ref(toJS(mobxObject[prop]));
 
     Object.defineProperty(vueState, prop, {
-      get: () => propertyRefs[prop].value,
+      get: () => {
+        const value = propertyRefs[prop].value;
+        // If it's an object/array, return a proxy that intercepts nested changes
+        if (value && typeof value === 'object') {
+          return new Proxy(value, {
+            set: (target, key, val) => {
+              target[key] = val;
+              // Update the Vue ref to trigger reactivity
+              propertyRefs[prop].value = clone(propertyRefs[prop].value);
+              // Update MobX immediately
+              mobxObject[prop] = clone(propertyRefs[prop].value);
+              return true;
+            }
+          });
+        }
+        return value;
+      },
       set: allowDirectMutation
         ? (value) => {
-            // Update Vue ref; the deep watcher below will propagate to MobX.
+            // Update Vue ref
             const cloned = clone(value);
             if (!isEqual(propertyRefs[prop].value, cloned)) {
               propertyRefs[prop].value = cloned;
+            }
+            // ALSO update MobX immediately (synchronous)
+            if (!isEqual(mobxObject[prop], cloned)) {
+              mobxObject[prop] = cloned;
             }
           }
         : () => console.warn(`Direct mutation of '${prop}' is disabled`),
@@ -57,7 +95,7 @@ export function useMobxBridge(mobxObject, options = {}) {
     });
 
     // Vue → MobX: deep watcher per data prop
-    watch(
+    /* watch(
       propertyRefs[prop],
       (newVal) => {
         if (updatingFromMobx.has(prop)) return; // avoid echo
@@ -72,7 +110,7 @@ export function useMobxBridge(mobxObject, options = {}) {
         }
       },
       { deep: true }
-    );
+    ); */
   });
 
   // ---- computed getters (read-only) -----------------------------------------
@@ -82,7 +120,9 @@ export function useMobxBridge(mobxObject, options = {}) {
 
     Object.defineProperty(vueState, prop, {
       get: () => getterRefs[prop].value,
-      set: () => console.warn(`Cannot assign to computed property '${prop}'`),
+      set: () => {
+        throw new Error(`Cannot assign to computed property '${prop}'`)
+      },
       enumerable: true,
       configurable: true,
     });
@@ -105,7 +145,7 @@ export function useMobxBridge(mobxObject, options = {}) {
   const dsub = deepObserve(mobxObject, (_change, path) => {
     // For each data prop, if the path hits it or its subtree, sync it
     members.properties.forEach(prop => {
-      if (path === prop || path.startsWith(prop + '.')) {
+      if (path === prop || path.startsWith(prop + '.') || (path === '' && _change.name === prop)) {
         if (!propertyRefs[prop]) return;
         if (updatingFromVue.has(prop)) return; // avoid echo
         updatingFromMobx.add(prop);

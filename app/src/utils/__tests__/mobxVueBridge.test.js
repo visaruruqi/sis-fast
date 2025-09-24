@@ -23,7 +23,15 @@ vi.mock('vue', () => ({
   onUnmounted: (fn) => {
     mockDisposers.push(fn)
   },
-  markRaw: (obj) => obj
+  markRaw: (obj) => obj,
+  watch: vi.fn((source, callback, options) => {
+    // Store the callback for manual triggering
+    if (typeof source === 'object' && source.value !== undefined) {
+      // For refs, store the callback
+      source._watcher = callback
+    }
+    return () => {} // cleanup function
+  })
 }))
 
 import { useMobxBridge } from '../mobxVueBridge.js'
@@ -177,7 +185,7 @@ describe('MobX-Vue Bridge with Computed Properties', () => {
         return this._value
       }
       
-      set value(newValue) {
+      setValue(newValue) {
         this._value = newValue
       }
       

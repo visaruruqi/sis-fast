@@ -24,6 +24,7 @@ export default class CourseModalPresenter {
     try {
       await this.instructorRepository.loadInstructors()
       this.instructorOptions = this.instructorRepository.getInstructorOptions()
+      console.log('Loaded instructor options:', this.instructorOptions)
     } catch (error) {
       console.error('Failed to load instructor options:', error)
       this.instructorOptions = []

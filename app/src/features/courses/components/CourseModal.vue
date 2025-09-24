@@ -113,6 +113,7 @@ let modal = null
 
 // Get instructor options from presenter (following Clean Architecture)
 const instructorOptions = computed(() => {
+  console.log('Instructor options in Vue:', state.instructorOptions)
   return state.instructorOptions || []
 })
 

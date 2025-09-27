@@ -35,6 +35,58 @@ export function useMobxBridge(mobxObject, options = {}) {
         return false;
       }
     }),
+    setters: props.filter(p => {
+      try {
+        // Check if it has a setter descriptor
+        const descriptor = Object.getOwnPropertyDescriptor(mobxObject, p) || 
+                          Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), p);
+        
+        // Must have a setter
+        if (!descriptor || typeof descriptor.set !== 'function') return false;
+        
+        // Exclude methods
+        if (typeof mobxObject[p] === 'function') return false;
+        
+        // For MobX objects with makeAutoObservable, we need to distinguish:
+        // 1. Regular observable properties (handled separately) 
+        // 2. Computed properties with setters (getter/setter pairs)
+        // 3. Setter-only properties
+        
+        // Include if it's a computed property with a WORKING setter (getter/setter pair)
+        try {
+          if (isComputedProp(mobxObject, p)) {
+            // For computed properties, test if the setter actually works
+            try {
+              const originalValue = mobxObject[p];
+              descriptor.set.call(mobxObject, originalValue); // Try to set to same value
+              return true; // Setter works, it's a getter/setter pair
+            } catch (setterError) {
+              return false; // Setter throws error, it's a computed-only property
+            }
+          }
+        } catch (error) {
+          // If isComputedProp fails, check if it has a getter and test the setter
+          if (descriptor.get) {
+            try {
+              // Try to get the current value and set it back
+              const currentValue = mobxObject[p];
+              descriptor.set.call(mobxObject, currentValue);
+              return true; // Setter works
+            } catch (setterError) {
+              return false; // Setter throws error
+            }
+          }
+        }
+        
+        // Include if it's NOT an observable property (setter-only or other cases)
+        if (!isObservableProp(mobxObject, p)) return true;
+        
+        // Exclude regular observable properties (they're handled separately)
+        return false;
+      } catch (error) {
+        return false;
+      }
+    }),
     properties: props.filter(p => {
       try {
         // Check if it's an observable property
@@ -114,9 +166,49 @@ export function useMobxBridge(mobxObject, options = {}) {
 
   });
 
-  // ---- computed getters (read-only) -----------------------------------------
+  // ---- getters and setters (handle both computed and two-way binding) ------
   const getterRefs = {};
-  members.getters.forEach(prop => {
+  const setterRefs = {};
+
+  // First, handle properties that have BOTH getters and setters (getter/setter pairs)
+  const getterSetterPairs = members.getters.filter(prop => members.setters.includes(prop));
+  const gettersOnly = members.getters.filter(prop => !members.setters.includes(prop));
+  const settersOnly = members.setters.filter(prop => !members.getters.includes(prop));
+
+  // Getter/setter pairs: writable with reactive updates
+  getterSetterPairs.forEach(prop => {
+    // Get initial value from getter
+    let initialValue;
+    try {
+      initialValue = toJS(mobxObject[prop]);
+    } catch (error) {
+      initialValue = undefined;
+    }
+    getterRefs[prop] = ref(initialValue);
+    setterRefs[prop] = ref(initialValue);
+
+    Object.defineProperty(vueState, prop, {
+      get: () => getterRefs[prop].value,
+      set: allowDirectMutation
+        ? (value) => {
+            // Update both refs
+            setterRefs[prop].value = value;
+            // Call the MobX setter immediately
+            try {
+              mobxObject[prop] = value;
+              // The getter ref will be updated by the reaction
+            } catch (error) {
+              console.warn(`Failed to set property '${prop}':`, error);
+            }
+          }
+        : () => console.warn(`Direct mutation of '${prop}' is disabled`),
+      enumerable: true,
+      configurable: true,
+    });
+  });
+
+  // Getter-only properties: read-only computed
+  gettersOnly.forEach(prop => {
     // Safely get initial value of computed property, handle errors gracefully
     let initialValue;
     try {
@@ -133,6 +225,31 @@ export function useMobxBridge(mobxObject, options = {}) {
       set: () => {
         throw new Error(`Cannot assign to computed property '${prop}'`)
       },
+      enumerable: true,
+      configurable: true,
+    });
+  });
+
+  // Setter-only properties: write-only
+  settersOnly.forEach(prop => {
+    // For setter-only properties, track the last set value
+    setterRefs[prop] = ref(undefined);
+
+    Object.defineProperty(vueState, prop, {
+      get: () => setterRefs[prop].value,
+      set: allowDirectMutation
+        ? (value) => {
+            // Update the setter ref
+            setterRefs[prop].value = value;
+            
+            // Call the MobX setter immediately
+            try {
+              mobxObject[prop] = value;
+            } catch (error) {
+              console.warn(`Failed to set property '${prop}':`, error);
+            }
+          }
+        : () => console.warn(`Direct mutation of setter '${prop}' is disabled`),
       enumerable: true,
       configurable: true,
     });
@@ -199,8 +316,8 @@ export function useMobxBridge(mobxObject, options = {}) {
     }
   });
 
-  // Computeds: keep them in sync via reaction (read-only updates)
-  members.getters.forEach(prop => {
+  // Getters: keep them in sync via reaction (both getter-only and getter/setter pairs)
+  [...gettersOnly, ...getterSetterPairs].forEach(prop => {
     const sub = reaction(
       () => {
         try {

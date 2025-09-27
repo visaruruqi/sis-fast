@@ -17,8 +17,8 @@ vi.mock('vue', () => ({
 
 import { useMobxBridge } from '../mobxVueBridge'
 
-describe('MobX-Vue Bridge All Getters as Computed', () => {
-  it('should treat all getters as computed properties (read-only)', () => {
+describe('MobX-Vue Bridge Getters and Setters', () => {
+  it('should treat getter/setter pairs as writable and getter-only as computed', () => {
     class TestPresenter {
       constructor() {
         this.vm = {
@@ -91,29 +91,33 @@ describe('MobX-Vue Bridge All Getters as Computed', () => {
     expect(state.loading).toBe(false)
     expect(state.showPropertyDetails).toBe(false)
 
-    // Test that all getters are read-only (cannot be assigned to)
-    expect(() => {
-      state.showDatepicker = true
-    }).toThrow(/Cannot assign to computed property/)
+    // Test that getter/setter pairs are writable
+    state.showDatepicker = true
+    expect(presenter.showDatepicker).toBe(true)
+    expect(state.showDatepicker).toBe(true)
+    expect(presenter.vm.show_datepicker).toBe(true)
 
-    expect(() => {
-      state.bookingDetailsPopup = true
-    }).toThrow(/Cannot assign to computed property/)
+    state.bookingDetailsPopup = true
+    expect(presenter.bookingDetailsPopup).toBe(true)
+    expect(state.bookingDetailsPopup).toBe(true)
+    expect(presenter.vm.booking_details_popup).toBe(true)
 
-    expect(() => {
-      state.loading = true
-    }).toThrow(/Cannot assign to computed property/)
+    state.loading = true
+    expect(presenter.loading).toBe(true)
+    expect(state.loading).toBe(true)
+    expect(presenter.vm.loading).toBe(true)
 
-    expect(() => {
-      state.showPropertyDetails = true
-    }).toThrow(/Cannot assign to computed property/)
+    state.showPropertyDetails = true
+    expect(presenter.showPropertyDetails).toBe(true)
+    expect(state.showPropertyDetails).toBe(true)
+    expect(presenter.vm.property_details).toBe(true)
 
     // Test that MobX -> Vue sync works (change via presenter)
     presenter.showPropertyDetails = true
     expect(state.showPropertyDetails).toBe(true)
 
     // Test that computed properties are read-only
-    expect(state.computedValue).toBe('Ready') // loading is false, so it should be 'Ready'
+    expect(state.computedValue).toBe('Loading...') // loading is true, so it should be 'Loading...'
     expect(() => {
       state.computedValue = 'Should not work'
     }).toThrow(/Cannot assign to computed property/)
@@ -122,12 +126,13 @@ describe('MobX-Vue Bridge All Getters as Computed', () => {
     expect(typeof state.toggleShowDatepicker).toBe('function')
     
     // Test method execution
+    const beforeToggle = state.showDatepicker
     state.toggleShowDatepicker()
-    expect(state.showDatepicker).toBe(true) // Should toggle to true (was false initially)
-    expect(presenter.vm.show_datepicker).toBe(true)
+    expect(state.showDatepicker).toBe(!beforeToggle) // Should toggle
+    expect(presenter.vm.show_datepicker).toBe(!beforeToggle)
   })
 
-  it('should treat all getters as computed in SecondHeaderPresenter-like class', () => {
+  it('should handle getter/setter pairs and computed-only getters correctly', () => {
     class SecondHeaderPresenter {
       constructor() {
         this.vm = {
@@ -217,22 +222,26 @@ describe('MobX-Vue Bridge All Getters as Computed', () => {
     expect(state.disableChangeDate).toBe(false) // Both dates are empty
     expect(state.headerFormattedDates).toBe('No dates selected')
 
-    // Test that ALL getters are read-only (including former getter/setter pairs)
-    expect(() => {
-      state.showDatepicker = true
-    }).toThrow(/Cannot assign to computed property/)
+    // Test that getter/setter pairs are writable
+    state.showDatepicker = true
+    expect(presenter.showDatepicker).toBe(true)
+    expect(presenter.vm.show_datepicker).toBe(true)
+    expect(state.showDatepicker).toBe(true)
 
-    expect(() => {
-      state.bookingDetailsPopup = true
-    }).toThrow(/Cannot assign to computed property/)
+    state.bookingDetailsPopup = true
+    expect(presenter.bookingDetailsPopup).toBe(true)
+    expect(presenter.vm.booking_details_popup).toBe(true)
+    expect(state.bookingDetailsPopup).toBe(true)
 
-    expect(() => {
-      state.loading = true
-    }).toThrow(/Cannot assign to computed property/)
+    state.loading = true
+    expect(presenter.loading).toBe(true)
+    expect(presenter.vm.loading).toBe(true)
+    expect(state.loading).toBe(true)
 
-    expect(() => {
-      state.showPropertyDetails = true
-    }).toThrow(/Cannot assign to computed property/)
+    state.showPropertyDetails = true
+    expect(presenter.showPropertyDetails).toBe(true)
+    expect(presenter.vm.property_details).toBe(true)
+    expect(state.showPropertyDetails).toBe(true)
 
     expect(() => {
       state.disableChangeDate = true
@@ -247,14 +256,16 @@ describe('MobX-Vue Bridge All Getters as Computed', () => {
     expect(typeof state.toggleShowPropertyDetails).toBe('function')
 
     // Test method execution - methods can modify the underlying vm properties
-    // which will be reflected in the computed getters
+    // which will be reflected in the getter/setter pairs
+    const initialShowDatepicker = state.showDatepicker
     state.toggleShowDatepicker()
-    expect(state.showDatepicker).toBe(true) // Should toggle to true
+    expect(state.showDatepicker).toBe(!initialShowDatepicker) // Should toggle
 
+    const initialShowPropertyDetails = state.showPropertyDetails
     state.toggleShowPropertyDetails()
-    expect(state.showPropertyDetails).toBe(true) // Should toggle to true
+    expect(state.showPropertyDetails).toBe(!initialShowPropertyDetails) // Should toggle
     
-    // Test that changes via presenter methods are reflected in computed properties
+    // Test that changes via presenter vm are reflected in getter/setter pairs
     presenter.vm.show_datepicker = false
     expect(state.showDatepicker).toBe(false) // Should reflect the change
   })

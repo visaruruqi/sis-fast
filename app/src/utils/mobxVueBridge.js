@@ -1,5 +1,5 @@
-import { reactive, onUnmounted, ref, watch } from 'vue';
-import { toJS, reaction, isComputedProp, isObservableProp } from 'mobx';
+import { reactive, onUnmounted, ref } from 'vue';
+import { toJS, reaction, observe, isComputedProp, isObservableProp } from 'mobx';
 import { deepObserve } from 'mobx-utils';
 import clone from 'clone';
 
@@ -17,30 +17,48 @@ export function useMobxBridge(mobxObject, options = {}) {
 
   const members = {
     getters: props.filter(p => {
-      const isComputed = isComputedProp(mobxObject, p);
-      if (!isComputed) return false;
-      // For computed properties, we need to check if the setter actually works
-      // If the setter throws an error, it's a true computed property
       try {
-        const descriptor = Object.getOwnPropertyDescriptor(mobxObject, p) || 
-                          Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), p);
-        if (descriptor && descriptor.set) {
-          // Try to call the setter - if it throws, it's a computed property
-          descriptor.set.call(mobxObject, 'test');
-          return false; // It's a getter/setter pair, not a computed
+        // First try to check if it's a computed property via MobX introspection
+        try {
+          return isComputedProp(mobxObject, p);
+        } catch (computedError) {
+          // If isComputedProp fails (e.g., due to uninitialized nested objects),
+          // fall back to checking if it has a getter descriptor
+          const descriptor = Object.getOwnPropertyDescriptor(mobxObject, p) || 
+                            Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mobxObject), p);
+          
+          // If it has a getter but no corresponding property, it's likely a computed getter
+          return descriptor && typeof descriptor.get === 'function' && 
+                 !isObservableProp(mobxObject, p);
         }
-        return true; // No setter, it's a computed property
       } catch (error) {
-        return true; // Setter throws error, it's a computed property
+        return false;
       }
     }),
-    properties: props.filter(
-      p =>
-        isObservableProp(mobxObject, p) &&
-        !isComputedProp(mobxObject, p) &&
-        typeof mobxObject[p] !== 'function'
-    ),
-    methods: props.filter(p => typeof mobxObject[p] === 'function'),
+    properties: props.filter(p => {
+      try {
+        // Check if it's an observable property
+        if (!isObservableProp(mobxObject, p)) return false;
+        
+        // Check if it's a function (method)
+        if (typeof mobxObject[p] === 'function') return false;
+        
+        // Check if it's a computed property - if so, it's a getter, not a property
+        const isComputed = isComputedProp(mobxObject, p);
+        if (isComputed) return false;
+        
+        return true; // Regular observable property
+      } catch (error) {
+        return false;
+      }
+    }),
+    methods: props.filter(p => {
+      try {
+        return typeof mobxObject[p] === 'function';
+      } catch (error) {
+        return false;
+      }
+    }),
   };
   
 
@@ -94,29 +112,21 @@ export function useMobxBridge(mobxObject, options = {}) {
       configurable: true,
     });
 
-    // Vue → MobX: deep watcher per data prop
-    /* watch(
-      propertyRefs[prop],
-      (newVal) => {
-        if (updatingFromMobx.has(prop)) return; // avoid echo
-        updatingFromVue.add(prop);
-        try {
-          const next = clone(newVal); // strip Vue proxies
-          if (!isEqual(mobxObject[prop], next)) {
-            mobxObject[prop] = next;
-          }
-        } finally {
-          updatingFromVue.delete(prop);
-        }
-      },
-      { deep: true }
-    ); */
   });
 
   // ---- computed getters (read-only) -----------------------------------------
   const getterRefs = {};
   members.getters.forEach(prop => {
-    getterRefs[prop] = ref(toJS(mobxObject[prop]));
+    // Safely get initial value of computed property, handle errors gracefully
+    let initialValue;
+    try {
+      initialValue = toJS(mobxObject[prop]);
+    } catch (error) {
+      // If computed property throws during initialization (e.g., accessing null.property),
+      // set initial value to undefined and let the reaction handle updates later
+      initialValue = undefined;
+    }
+    getterRefs[prop] = ref(initialValue);
 
     Object.defineProperty(vueState, prop, {
       get: () => getterRefs[prop].value,
@@ -138,14 +148,13 @@ export function useMobxBridge(mobxObject, options = {}) {
     });
   });
 
-  // ---- MobX → Vue: deepObserve + reactions ---------------------------------
+  // ---- MobX → Vue: individual observe + targeted deepObserve ---------------
   const subscriptions = [];
 
-  // Single deep observer for ALL nested mutations (and top-level assignments)
-  const dsub = deepObserve(mobxObject, (_change, path) => {
-    // For each data prop, if the path hits it or its subtree, sync it
-    members.properties.forEach(prop => {
-      if (path === prop || path.startsWith(prop + '.') || (path === '' && _change.name === prop)) {
+  // Use individual observe for each property to avoid circular reference issues
+  members.properties.forEach(prop => {
+    try {
+      const sub = observe(mobxObject, prop, (change) => {
         if (!propertyRefs[prop]) return;
         if (updatingFromVue.has(prop)) return; // avoid echo
         updatingFromMobx.add(prop);
@@ -157,15 +166,50 @@ export function useMobxBridge(mobxObject, options = {}) {
         } finally {
           updatingFromMobx.delete(prop);
         }
-      }
-    });
+      });
+      subscriptions.push(sub);
+    } catch (error) {
+      // Silently ignore non-observable properties
+    }
   });
-  subscriptions.push(dsub);
+
+  // For nested objects, use deepObserve on individual properties to handle deep changes
+  // This avoids circular reference issues while still detecting nested mutations
+  members.properties.forEach(prop => {
+    const value = mobxObject[prop];
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      try {
+        const sub = deepObserve(value, (change, path) => {
+          if (!propertyRefs[prop]) return;
+          if (updatingFromVue.has(prop)) return; // avoid echo
+          updatingFromMobx.add(prop);
+          try {
+            const next = toJS(mobxObject[prop]);
+            if (!isEqual(propertyRefs[prop].value, next)) {
+              propertyRefs[prop].value = next;
+            }
+          } finally {
+            updatingFromMobx.delete(prop);
+          }
+        });
+        subscriptions.push(sub);
+      } catch (error) {
+        // Silently ignore if deepObserve fails (e.g., circular references in nested objects)
+      }
+    }
+  });
 
   // Computeds: keep them in sync via reaction (read-only updates)
   members.getters.forEach(prop => {
     const sub = reaction(
-      () => toJS(mobxObject[prop]),
+      () => {
+        try {
+          return toJS(mobxObject[prop]);
+        } catch (error) {
+          // If computed property throws (e.g., accessing null.property), return undefined
+          return undefined;
+        }
+      },
       (next) => {
         if (!getterRefs[prop]) return;
         if (!isEqual(getterRefs[prop].value, next)) {

@@ -77,7 +77,6 @@ describe('MobX-Vue Bridge Getters and Setters', () => {
     const presenter = new TestPresenter()
     const state = useMobxBridge(presenter)
 
-    console.log('Available properties on state:', Object.keys(state))
 
     // Test that all getters are available as computed properties (read-only)
     expect(state.showDatepicker).toBeDefined()
@@ -204,7 +203,6 @@ describe('MobX-Vue Bridge Getters and Setters', () => {
     const presenter = new SecondHeaderPresenter()
     const state = useMobxBridge(presenter)
 
-    console.log('SecondHeaderPresenter state properties:', Object.keys(state))
 
     // Test that all getters are available as computed properties
     expect(state.bookingDetailsPopup).toBeDefined()

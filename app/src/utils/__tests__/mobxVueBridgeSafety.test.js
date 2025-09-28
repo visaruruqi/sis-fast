@@ -257,6 +257,9 @@ describe('MobX-Vue Bridge - Safety and Architecture', () => {
     expect(presenter.userRole).toBe('user')
     expect(presenter.userPermissions).toEqual(['read'])
 
+    // Clear previous calls before testing promoteUser
+    consoleSpy.mockClear()
+    
     state.promoteUser()
     expect(presenter.userRole).toBe('moderator')
     expect(presenter.userPermissions).toEqual(['read', 'write'])

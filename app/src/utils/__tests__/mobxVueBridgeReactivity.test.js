@@ -159,7 +159,6 @@ describe('MobX-Vue Bridge Reactivity Tests', () => {
     try {
       state.course = { id: 'test', name: 'Test Course' }
       // If we get here, the assignment worked (which might be unexpected)
-      console.log('Assignment to computed property worked:', state.course)
     } catch (error) {
       // Expected - computed properties should be read-only
       expect(error.message).toContain('computed')

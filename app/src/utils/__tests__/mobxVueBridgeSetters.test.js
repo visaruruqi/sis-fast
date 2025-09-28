@@ -62,7 +62,6 @@ describe('MobX-Vue Bridge Setters Two-Way Binding', () => {
     const presenter = new TestPresenter()
     const state = useMobxBridge(presenter)
 
-    console.log('Setter-only test - Available properties:', Object.keys(state))
 
     // Test that setters are available as writable properties
     expect('value' in state).toBe(true)
@@ -147,7 +146,6 @@ describe('MobX-Vue Bridge Setters Two-Way Binding', () => {
     const presenter = new UserPresenter()
     const state = useMobxBridge(presenter)
 
-    console.log('Getter/setter pairs test - Available properties:', Object.keys(state))
 
     // Test that all properties are available
     expect('showDatepicker' in state).toBe(true) // Should be both getter (computed) AND setter (writable)
@@ -247,7 +245,6 @@ describe('MobX-Vue Bridge Setters Two-Way Binding', () => {
     const presenter = new ValidationPresenter()
     const state = useMobxBridge(presenter)
 
-    console.log('Validation test - Available properties:', Object.keys(state))
 
     // Test initial state
     expect(state.email).toBe('')
@@ -318,7 +315,6 @@ describe('MobX-Vue Bridge Setters Two-Way Binding', () => {
     const presenter = new ActionPresenter()
     const state = useMobxBridge(presenter)
 
-    console.log('Action test - Available properties:', Object.keys(state))
 
     // Test that setters are available
     expect('command' in state).toBe(true)
@@ -410,7 +406,6 @@ describe('MobX-Vue Bridge Setters Two-Way Binding', () => {
     const presenter = new SideEffectsPresenter()
     const state = useMobxBridge(presenter)
 
-    console.log('Side effects test - Available properties:', Object.keys(state))
 
     // Test initial state
     expect(state.data).toBe(null)

@@ -420,8 +420,6 @@ describe('MobX-Vue Bridge Nested Object Initialization', () => {
     
     // This is expected behavior for now - the computed properties work correctly
     // but direct nested access through the state proxy has limitations
-    console.log('State data:', state.data)
-    console.log('State data items:', state.data?.items)
     
     // For now, we'll test that the computed properties work correctly
     // which is the most important functionality

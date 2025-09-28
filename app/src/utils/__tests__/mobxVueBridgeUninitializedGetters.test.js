@@ -78,7 +78,6 @@ describe('MobX-Vue Bridge Uninitialized Getters', () => {
     const presenter = new UserPresenter()
     const state = useMobxBridge(presenter)
 
-    console.log('Available properties on state:', Object.keys(state))
 
     // Test that ALL getters are included as properties, even those that throw during evaluation
     expect('userName' in state).toBe(true)
@@ -151,7 +150,6 @@ describe('MobX-Vue Bridge Uninitialized Getters', () => {
     const presenter = new DataPresenter()
     const state = useMobxBridge(presenter)
 
-    console.log('DataPresenter state properties:', Object.keys(state))
 
     // Test that all getters are included as properties
     expect('itemCount' in state).toBe(true)

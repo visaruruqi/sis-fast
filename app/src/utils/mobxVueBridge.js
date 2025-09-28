@@ -3,6 +3,11 @@ import { toJS, reaction, observe, isComputedProp, isObservableProp } from 'mobx'
 import { deepObserve } from 'mobx-utils';
 import clone from 'clone';
 
+// 🔄 EXPERIMENTAL: Enhanced deep observation (can be disabled if problematic)
+// Set to true to use the enhanced observer that fixes stale deepObserve subscriptions
+const USE_ENHANCED_DEEP_OBSERVER = true;
+import { createEnhancedPropertyObservers } from './dynamicDeepObserver.js';
+
 /**
  * 🌉 MobX-Vue Bridge
  */
@@ -265,38 +270,37 @@ export function useMobxBridge(mobxObject, options = {}) {
     });
   });
 
-  // ---- MobX → Vue: individual observe + targeted deepObserve ---------------
+  // ---- MobX → Vue: property observation ----------------------------------------
   const subscriptions = [];
 
-  // Use individual observe for each property to avoid circular reference issues
-  members.properties.forEach(prop => {
+  if (USE_ENHANCED_DEEP_OBSERVER) {
+    // 🔄 EXPERIMENTAL: Use enhanced observer that fixes stale deepObserve subscriptions
     try {
-      const sub = observe(mobxObject, prop, (change) => {
-        if (!propertyRefs[prop]) return;
-        if (updatingFromVue.has(prop)) return; // avoid echo
-        updatingFromMobx.add(prop);
-        try {
-          const next = toJS(mobxObject[prop]);
-          if (!isEqual(propertyRefs[prop].value, next)) {
-            propertyRefs[prop].value = next;
-          }
-        } finally {
-          updatingFromMobx.delete(prop);
-        }
-      });
-      subscriptions.push(sub);
+      const enhancedDisposers = createEnhancedPropertyObservers(
+        mobxObject,
+        members.properties,
+        propertyRefs,
+        toJS,
+        isEqual,
+        updatingFromVue,
+        updatingFromMobx
+      );
+      subscriptions.push(...enhancedDisposers);
     } catch (error) {
-      // Silently ignore non-observable properties
+      console.warn('Enhanced deep observer failed, falling back to standard approach:', error);
+      // Fallback to standard approach if enhanced observer fails
+      setupStandardPropertyObservers();
     }
-  });
+  } else {
+    setupStandardPropertyObservers();
+  }
 
-  // For nested objects, use deepObserve on individual properties to handle deep changes
-  // This avoids circular reference issues while still detecting nested mutations
-  members.properties.forEach(prop => {
-    const value = mobxObject[prop];
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
+  // Fallback standard property observation (original implementation)
+  function setupStandardPropertyObservers() {
+    // Use individual observe for each property to avoid circular reference issues
+    members.properties.forEach(prop => {
       try {
-        const sub = deepObserve(value, (change, path) => {
+        const sub = observe(mobxObject, prop, (change) => {
           if (!propertyRefs[prop]) return;
           if (updatingFromVue.has(prop)) return; // avoid echo
           updatingFromMobx.add(prop);
@@ -311,10 +315,36 @@ export function useMobxBridge(mobxObject, options = {}) {
         });
         subscriptions.push(sub);
       } catch (error) {
-        // Silently ignore if deepObserve fails (e.g., circular references in nested objects)
+        // Silently ignore non-observable properties
       }
-    }
-  });
+    });
+
+    // For nested objects, use deepObserve on individual properties to handle deep changes
+    // This avoids circular reference issues while still detecting nested mutations
+    members.properties.forEach(prop => {
+      const value = mobxObject[prop];
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        try {
+          const sub = deepObserve(value, (change, path) => {
+            if (!propertyRefs[prop]) return;
+            if (updatingFromVue.has(prop)) return; // avoid echo
+            updatingFromMobx.add(prop);
+            try {
+              const next = toJS(mobxObject[prop]);
+              if (!isEqual(propertyRefs[prop].value, next)) {
+                propertyRefs[prop].value = next;
+              }
+            } finally {
+              updatingFromMobx.delete(prop);
+            }
+          });
+          subscriptions.push(sub);
+        } catch (error) {
+          // Silently ignore if deepObserve fails (e.g., circular references in nested objects)
+        }
+      }
+    });
+  }
 
   // Getters: keep them in sync via reaction (both getter-only and getter/setter pairs)
   [...gettersOnly, ...getterSetterPairs].forEach(prop => {

@@ -42,7 +42,6 @@ describe('MobX-Vue Bridge Loop Detection', () => {
     }
     const end = Date.now()
     
-    console.log(`Wrote 10 times in ${end - start}ms`)
     
     // The test should pass even if loop detection doesn't trigger
     // because the main goal is to prevent crashes

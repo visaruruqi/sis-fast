@@ -3,16 +3,20 @@ import { toJS, reaction, observe, isComputedProp, isObservableProp } from 'mobx'
 import { deepObserve } from 'mobx-utils';
 import clone from 'clone';
 
-// 🔄 EXPERIMENTAL: Enhanced deep observation (can be disabled if problematic)
-// Set to true to use the enhanced observer that fixes stale deepObserve subscriptions
-const USE_ENHANCED_DEEP_OBSERVER = true;
-import { createEnhancedPropertyObservers } from './dynamicDeepObserver.js';
-
 /**
  * 🌉 MobX-Vue Bridge
+ * 
+ * @param {object} mobxObject - The MobX observable object to bridge
+ * @param {object} options - Configuration options
+ * @param {boolean} options.allowDirectMutation - Whether to allow direct mutation of properties
+ * @returns {object} Vue reactive state object
  */
 export function useMobxBridge(mobxObject, options = {}) {
-  const allowDirectMutation = options.allowDirectMutation ?? true;
+  const safeOptions = options || {};
+  // Use explicit boolean conversion to handle truthy/falsy values properly
+  const allowDirectMutation = safeOptions.allowDirectMutation !== undefined 
+    ? Boolean(safeOptions.allowDirectMutation) 
+    : true; // Keep the original default of true
   const vueState = reactive({});
 
   // Discover props/methods via MobX introspection (don’t rely on raw descriptors)
@@ -125,30 +129,81 @@ export function useMobxBridge(mobxObject, options = {}) {
 
   const isEqual = (a, b) => {
     if (Object.is(a, b)) return true;
-    try { return JSON.stringify(a) === JSON.stringify(b); }
-    catch { return false; }
+    
+    // Handle null/undefined cases
+    if (a == null || b == null) return a === b;
+    
+    // Different types are not equal
+    if (typeof a !== typeof b) return false;
+    
+    // For primitives, Object.is should have caught them
+    if (typeof a !== 'object') return false;
+    
+    // Fast array comparison
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      return a.every((val, i) => isEqual(val, b[i]));
+    }
+    
+    // Fast object comparison - check keys first
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    
+    // Check if all keys match
+    if (!aKeys.every(key => bKeys.includes(key))) return false;
+    
+    // Check values (recursive)
+    return aKeys.every(key => isEqual(a[key], b[key]));
+  };
+
+  // Warning helpers to reduce duplication
+  const warnDirectMutation = (prop) => console.warn(`Direct mutation of '${prop}' is disabled`);
+  const warnSetterMutation = (prop) => console.warn(`Direct mutation of setter '${prop}' is disabled`);
+  const warnMethodAssignment = (prop) => console.warn(`Cannot assign to method '${prop}'`);
+
+  // Helper to create deep proxies for nested objects and arrays
+  const createDeepProxy = (value, prop) => {
+    // Don't proxy built-in objects that should remain unchanged
+    if (value instanceof Date || value instanceof RegExp || value instanceof Map || 
+        value instanceof Set || value instanceof WeakMap || value instanceof WeakSet) {
+      return value;
+    }
+    
+    return new Proxy(value, {
+      get: (target, key) => {
+        const result = target[key];
+        // If the result is an object/array, wrap it in a proxy too (but not built-ins)
+        if (result && typeof result === 'object' && 
+            !(result instanceof Date || result instanceof RegExp || result instanceof Map || 
+              result instanceof Set || result instanceof WeakMap || result instanceof WeakSet)) {
+          return createDeepProxy(result, prop);
+        }
+        return result;
+      },
+      set: (target, key, val) => {
+        target[key] = val;
+        // Update the Vue ref to trigger reactivity
+        propertyRefs[prop].value = clone(propertyRefs[prop].value);
+        // Update MobX immediately
+        mobxObject[prop] = clone(propertyRefs[prop].value);
+        return true;
+      }
+    });
   };
 
   // ---- properties (two-way) -------------------------------------------------
   const propertyRefs = {};
+  
   members.properties.forEach(prop => {
     propertyRefs[prop] = ref(toJS(mobxObject[prop]));
 
     Object.defineProperty(vueState, prop, {
       get: () => {
         const value = propertyRefs[prop].value;
-        // If it's an object/array, return a proxy that intercepts nested changes
+        // For objects/arrays, return a deep proxy that syncs mutations back
         if (value && typeof value === 'object') {
-          return new Proxy(value, {
-            set: (target, key, val) => {
-              target[key] = val;
-              // Update the Vue ref to trigger reactivity
-              propertyRefs[prop].value = clone(propertyRefs[prop].value);
-              // Update MobX immediately
-              mobxObject[prop] = clone(propertyRefs[prop].value);
-              return true;
-            }
-          });
+          return createDeepProxy(value, prop);
         }
         return value;
       },
@@ -164,7 +219,7 @@ export function useMobxBridge(mobxObject, options = {}) {
               mobxObject[prop] = cloned;
             }
           }
-        : () => console.warn(`Direct mutation of '${prop}' is disabled`),
+        : () => warnDirectMutation(prop),
       enumerable: true,
       configurable: true,
     });
@@ -206,7 +261,7 @@ export function useMobxBridge(mobxObject, options = {}) {
               console.warn(`Failed to set property '${prop}':`, error);
             }
           }
-        : () => console.warn(`Direct mutation of '${prop}' is disabled`),
+        : () => warnDirectMutation(prop),
       enumerable: true,
       configurable: true,
     });
@@ -254,7 +309,7 @@ export function useMobxBridge(mobxObject, options = {}) {
               console.warn(`Failed to set property '${prop}':`, error);
             }
           }
-        : () => console.warn(`Direct mutation of setter '${prop}' is disabled`),
+        : () => warnSetterMutation(prop),
       enumerable: true,
       configurable: true,
     });
@@ -262,9 +317,11 @@ export function useMobxBridge(mobxObject, options = {}) {
 
   // ---- methods (bound) ------------------------------------------------------
   members.methods.forEach(prop => {
+    // Cache the bound method to avoid creating new functions on every access
+    const boundMethod = mobxObject[prop].bind(mobxObject);
     Object.defineProperty(vueState, prop, {
-      get: () => mobxObject[prop].bind(mobxObject),
-      set: () => console.warn(`Cannot assign to method '${prop}'`),
+      get: () => boundMethod,
+      set: () => warnMethodAssignment(prop),
       enumerable: true,
       configurable: true,
     });
@@ -273,29 +330,9 @@ export function useMobxBridge(mobxObject, options = {}) {
   // ---- MobX → Vue: property observation ----------------------------------------
   const subscriptions = [];
 
-  if (USE_ENHANCED_DEEP_OBSERVER) {
-    // 🔄 EXPERIMENTAL: Use enhanced observer that fixes stale deepObserve subscriptions
-    try {
-      const enhancedDisposers = createEnhancedPropertyObservers(
-        mobxObject,
-        members.properties,
-        propertyRefs,
-        toJS,
-        isEqual,
-        updatingFromVue,
-        updatingFromMobx
-      );
-      subscriptions.push(...enhancedDisposers);
-    } catch (error) {
-      console.warn('Enhanced deep observer failed, falling back to standard approach:', error);
-      // Fallback to standard approach if enhanced observer fails
-      setupStandardPropertyObservers();
-    }
-  } else {
-    setupStandardPropertyObservers();
-  }
+  setupStandardPropertyObservers();
 
-  // Fallback standard property observation (original implementation)
+  // Standard property observation implementation
   function setupStandardPropertyObservers() {
     // Use individual observe for each property to avoid circular reference issues
     members.properties.forEach(prop => {
@@ -319,11 +356,11 @@ export function useMobxBridge(mobxObject, options = {}) {
       }
     });
 
-    // For nested objects, use deepObserve on individual properties to handle deep changes
-    // This avoids circular reference issues while still detecting nested mutations
+    // For nested objects and arrays, use deepObserve to handle deep changes
+    // This handles both object properties and array mutations
     members.properties.forEach(prop => {
       const value = mobxObject[prop];
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
+      if (value && typeof value === 'object') { // Include both objects AND arrays
         try {
           const sub = deepObserve(value, (change, path) => {
             if (!propertyRefs[prop]) return;
@@ -369,13 +406,27 @@ export function useMobxBridge(mobxObject, options = {}) {
 
   // Cleanup
   onUnmounted(() => {
-    subscriptions.forEach(unsub => { try { typeof unsub === 'function' && unsub(); } catch {} });
+    subscriptions.forEach(unsub => {
+      try {
+        if (typeof unsub === 'function') {
+          unsub();
+        }
+      } catch {
+        // Silently ignore cleanup errors
+      }
+    });
   });
 
   return vueState;
 }
 
-// Helper alias
+/**
+ * Helper alias for useMobxBridge - commonly used with presenter objects
+ * 
+ * @param {object} presenter - The MobX presenter object to bridge
+ * @param {object} options - Configuration options
+ * @returns {object} Vue reactive state object
+ */
 export function usePresenterState(presenter, options = {}) {
   return useMobxBridge(presenter, options);
 }

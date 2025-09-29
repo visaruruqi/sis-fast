@@ -150,7 +150,7 @@ describe('MobX-Vue Bridge Two-Way Binding', () => {
     expect(state.items).toEqual(['item1', 'item2', 'item3'])
   })
 
-  test('should verify markRaw is called when assigning to MobX', () => {
+  test('should verify array assignment and array push is working in two ways', () => {
     const presenter = makeAutoObservable({
       count: 0,
       items: []
